@@ -1,0 +1,306 @@
+{
+  "_comment": "Bucketlistt.com sitemap mapping — drives automatic contextual backlinks & CTA widget injection with 100% verified live URLs",
+
+  "activities": {
+    "rafting": {
+      "keywords": [
+        "river rafting in rishikesh",
+        "rafting in rishikesh",
+        "white water rafting in rishikesh",
+        "white-water rafting",
+        "river rafting",
+        "rishikesh rafting"
+      ],
+      "url": "https://www.bucketlistt.com/rishikesh/river-rafting",
+      "category_url": "https://www.bucketlistt.com/rafting",
+      "cta_title": "🌊 Book River Rafting in Rishikesh",
+      "cta_text": "Experience the thrill of white-water rafting with certified guides and a 100% safety record. Choose from 9km to 36km routes — instant confirmation guaranteed!",
+      "cta_button_text": "Book Rishikesh Rafting Now",
+      "priority": 10
+    },
+    "bungee": {
+      "keywords": [
+        "bungee jumping in rishikesh",
+        "bungee jump in rishikesh",
+        "highest bungee jump in india",
+        "highest bungee",
+        "bungee jumping",
+        "83m bungee",
+        "117m bungee",
+        "himalayan bungee"
+      ],
+      "url": "https://www.bucketlistt.com/rishikesh/bungee-jumping",
+      "category_url": "https://www.bucketlistt.com/bungee",
+      "cta_title": "🪂 India's Highest Bungee Jump",
+      "cta_text": "Plunge from an 83-metre cantilever platform over the Himalayas. Certified by a team of expert jumpmasters. Book your jump today — slots fill up fast!",
+      "cta_button_text": "Book Bungee Jump Now",
+      "priority": 10
+    },
+    "zipline": {
+      "keywords": [
+        "zipline in rishikesh",
+        "zip line in rishikesh",
+        "flying fox rishikesh",
+        "zipline over ganga",
+        "zip line over ganga",
+        "flying fox adventure"
+      ],
+      "url": "https://www.bucketlistt.com/rishikesh/zip-line-over-ganga",
+      "category_url": "https://www.bucketlistt.com/zipline",
+      "cta_title": "🦅 Fly Over the Sacred Ganga",
+      "cta_text": "Soar across the Ganga river on one of India's most scenic ziplines. A must-do adventure for every Rishikesh traveller!",
+      "cta_button_text": "Book Zipline Over Ganga",
+      "priority": 8
+    },
+    "camping": {
+      "keywords": [
+        "camping in rishikesh",
+        "riverside camping",
+        "camp in rishikesh",
+        "beach camping rishikesh",
+        "tent stay rishikesh",
+        "night camping rishikesh"
+      ],
+      "url": "https://www.bucketlistt.com/rishikesh/camping",
+      "category_url": "https://www.bucketlistt.com/rishikesh/camping",
+      "cta_title": "⛺ Camp Under the Stars in Rishikesh",
+      "cta_text": "Wake up to the sound of the Ganga flowing by. Book verified riverside camping packages with meals, bonfires, and adventure activities included!",
+      "cta_button_text": "Book Rishikesh Camping",
+      "priority": 7
+    },
+    "paramotoring": {
+      "keywords": [
+        "paramotoring in rishikesh",
+        "paramotor rishikesh",
+        "aerial adventure rishikesh",
+        "powered paragliding rishikesh"
+      ],
+      "url": "https://www.bucketlistt.com/rishikesh/paramotoring",
+      "category_url": "https://www.bucketlistt.com/paragliding",
+      "cta_title": "🚀 Paramotoring in Rishikesh",
+      "cta_text": "Fly like a bird over the Himalayan foothills with a powered paraglider. An unforgettable aerial adventure awaits!",
+      "cta_button_text": "Book Paramotoring Now",
+      "priority": 6
+    },
+    "splash_bungy": {
+      "keywords": [
+        "splash bungy",
+        "water bungee rishikesh",
+        "splash bungee rishikesh",
+        "bungy over water"
+      ],
+      "url": "https://www.bucketlistt.com/rishikesh/splash-bungy",
+      "category_url": "https://www.bucketlistt.com/bungee",
+      "cta_title": "💦 Splash Bungy — The Ultimate Plunge",
+      "cta_text": "The only bungee in India where you hit the water! A unique thrill that combines the height of a bungee jump with the splash of a river.",
+      "cta_button_text": "Book Splash Bungy",
+      "priority": 6
+    },
+    "bike_rental": {
+      "keywords": [
+        "bike rental in rishikesh",
+        "rent a bike in rishikesh",
+        "motorcycle rental rishikesh",
+        "scooter rental rishikesh",
+        "two-wheeler rental rishikesh"
+      ],
+      "url": "https://www.bucketlistt.com/rishikesh/bike-rental-rishikesh",
+      "category_url": "https://www.bucketlistt.com/rishikesh",
+      "cta_title": "🏍️ Rent a Bike in Rishikesh",
+      "cta_text": "Explore Rishikesh at your own pace on a well-maintained bike or scooter. Easy booking, competitive rates, doorstep delivery available!",
+      "cta_button_text": "Rent a Bike Now",
+      "priority": 5
+    },
+    "ganga_aarti": {
+      "keywords": [
+        "ganga aarti triveni ghat",
+        "triveni ghat aarti",
+        "ganga aarti rishikesh",
+        "front row ganga aarti",
+        "rishikesh aarti experience"
+      ],
+      "url": "https://www.bucketlistt.com/rishikesh/front-row-seats-at-ganga-aarti-triveni-ghat",
+      "category_url": "https://www.bucketlistt.com/rishikesh",
+      "cta_title": "🪔 Front-Row Seats at Ganga Aarti",
+      "cta_text": "Experience the magical Ganga Aarti at Triveni Ghat with reserved front-row seats — a deeply spiritual moment you'll never forget.",
+      "cta_button_text": "Book Ganga Aarti Experience",
+      "priority": 7
+    },
+    "hot_air_balloon": {
+      "keywords": [
+        "hot air balloon in rishikesh",
+        "hot air balloon rishikesh",
+        "hot air balloon ride rishikesh",
+        "hot air ballooning rishikesh",
+        "hot air balloon ride",
+        "hot air balloon"
+      ],
+      "url": "https://www.bucketlistt.com/rishikesh/hot-air-balloon",
+      "category_url": "https://www.bucketlistt.com/hot-air-balloon",
+      "cta_title": "🎈 Hot Air Ballooning in Rishikesh",
+      "cta_text": "Experience breathtaking 360-degree aerial views of the Himalayan foothills and the sacred Ganga river from a tethered hot air balloon.",
+      "cta_button_text": "Book Hot Air Balloon Ride",
+      "priority": 7
+    },
+    "paragliding": {
+      "keywords": [
+        "paragliding in rishikesh",
+        "paragliding rishikesh",
+        "paraglide in rishikesh",
+        "paragliding adventure rishikesh",
+        "paragliding"
+      ],
+      "url": "https://www.bucketlistt.com/rishikesh/paragliding",
+      "category_url": "https://www.bucketlistt.com/paragliding",
+      "cta_title": "🪂 Paragliding in Rishikesh",
+      "cta_text": "Soar high above the mountains with experienced tandem pilots and enjoy bird's-eye views of the Himalayan valley.",
+      "cta_button_text": "Book Paragliding Flight",
+      "priority": 7
+    }
+  },
+
+  "hub_links": {
+    "rishikesh_general": {
+      "keywords": [
+        "rishikesh",
+        "visit rishikesh",
+        "travel to rishikesh",
+        "trip to rishikesh",
+        "things to do in rishikesh",
+        "adventure sports in rishikesh",
+        "hotels in rishikesh",
+        "hostels in rishikesh",
+        "places to stay in rishikesh",
+        "how to reach rishikesh"
+      ],
+      "url": "https://www.bucketlistt.com/rishikesh",
+      "anchor_text": "explore all Rishikesh adventures on Bucketlistt"
+    }
+  },
+
+  "verified_blogs": [
+    {
+      "title": "Paragliding in India: Cost & Tips",
+      "url": "https://www.bucketlistt.com/blogs/paragliding-in-india-cost-and-tips",
+      "keywords": ["paragliding cost", "paragliding tips"]
+    },
+    {
+      "title": "Best Adventure Booking Platform in Rishikesh",
+      "url": "https://www.bucketlistt.com/blogs/best-adventure-booking-platform-in-rishikesh-bucketlistt",
+      "keywords": ["adventure booking", "trusted booking platform"]
+    },
+    {
+      "title": "Places to Visit in Rishikesh in One Day",
+      "url": "https://www.bucketlistt.com/blogs/places-to-visit-in-rishikesh-in-one-day",
+      "keywords": ["rishikesh 1 day trip", "places to visit in rishikesh in one day"]
+    },
+    {
+      "title": "Best Zipline Adventures India",
+      "url": "https://www.bucketlistt.com/blogs/best-zipline-adventures-india",
+      "keywords": ["best zipline in india", "zipline destinations"]
+    },
+    {
+      "title": "Top Adventure Holiday Spots Rishikesh",
+      "url": "https://www.bucketlistt.com/blogs/top-adventure-holiday-spots-rishikesh",
+      "keywords": ["adventure holiday spots", "rishikesh holiday"]
+    },
+    {
+      "title": "Best Rishikesh Rafting Distance for Beginners",
+      "url": "https://www.bucketlistt.com/blogs/best-rishikesh-rafting-distance-for-beginners",
+      "keywords": ["rafting distance for beginners", "9km vs 16km rafting"]
+    },
+    {
+      "title": "Bungee Jumping Height in Rishikesh",
+      "url": "https://www.bucketlistt.com/blogs/bungee-jumping-height-in-rishikesh",
+      "keywords": ["bungee jumping height", "how high is bungee"]
+    },
+    {
+      "title": "Book Safe River Rafting Rishikesh",
+      "url": "https://www.bucketlistt.com/blogs/book-safe-river-rafting-rishikesh",
+      "keywords": ["safe river rafting", "rafting safety guidelines"]
+    },
+    {
+      "title": "10 Reasons to Try Bungee Jumping Rishikesh",
+      "url": "https://www.bucketlistt.com/blogs/10-reasons-to-try-bungee-jumping-rishikesh",
+      "keywords": ["reasons for bungee jumping", "bungee jump benefits"]
+    },
+    {
+      "title": "Top Trending Adventure Activities in Rishikesh",
+      "url": "https://www.bucketlistt.com/blogs/top-trending-adventure-activities-in-rishikesh",
+      "keywords": ["trending adventure activities", "top rishikesh activities"]
+    },
+    {
+      "title": "Adventure Sports Booking Tips India",
+      "url": "https://www.bucketlistt.com/blogs/adventure-sports-booking-tips-india",
+      "keywords": ["booking tips", "adventure sports tips"]
+    },
+    {
+      "title": "Best Paragliding Places in India",
+      "url": "https://www.bucketlistt.com/blogs/best-paragliding-places-in-india",
+      "keywords": ["paragliding places", "best paragliding india"]
+    },
+    {
+      "title": "Price of Highest Bungee Jumping in Rishikesh",
+      "url": "https://www.bucketlistt.com/blogs/price-of-highest-bungee-jumping-in-rishikesh",
+      "keywords": ["highest bungee price", "bungee jumping cost"]
+    },
+    {
+      "title": "Adventure Sports in India Before 30",
+      "url": "https://www.bucketlistt.com/blogs/adventure-sports-in-india-before-30",
+      "keywords": ["adventure sports before 30", "bucketlist adventures india"]
+    },
+    {
+      "title": "Top Reasons to Try a Hot Air Balloon Ride in Rishikesh",
+      "url": "https://www.bucketlistt.com/blogs/top-reasons-to-try-a-hot-air-balloon-ride-in-rishikesh",
+      "keywords": ["hot air balloon reasons", "balloon ride rishikesh"]
+    },
+    {
+      "title": "Prices of Bungee Jumping in Rishikesh",
+      "url": "https://www.bucketlistt.com/blogs/what-are-the-prices-of-bungee-jumping-in-rishikesh",
+      "keywords": ["bungee price list", "bungee jump rates"]
+    },
+    {
+      "title": "Top Reasons to Book River Rafting with Bucketlistt",
+      "url": "https://www.bucketlistt.com/blogs/top-reasons-to-book-river-rafting-with-bucketlistt",
+      "keywords": ["why book rafting bucketlistt", "bucketlistt rafting"]
+    },
+    {
+      "title": "Best Adventure Activities Rishikesh Solo Travelers",
+      "url": "https://www.bucketlistt.com/blogs/best-adventure-activities-rishikesh-solo-travelers",
+      "keywords": ["solo travel rishikesh", "solo adventure activities"]
+    },
+    {
+      "title": "Splash Bungee Jumping Rishikesh",
+      "url": "https://www.bucketlistt.com/blogs/splash-bungee-jumping-rishikesh",
+      "keywords": ["splash bungee guide", "water bungee experience"]
+    },
+    {
+      "title": "Best Bungee Jumping in Rishikesh 2026",
+      "url": "https://www.bucketlistt.com/blogs/best-bungee-jumping-in-rishikesh-2026",
+      "keywords": ["bungee jumping 2026", "best bungee rishikesh"]
+    },
+    {
+      "title": "Weight Limit Details for Flying Fox in Rishikesh",
+      "url": "https://www.bucketlistt.com/blogs/are-you-eligible-for-the-flying-fox-in-rishikesh-weight-limit-details",
+      "keywords": ["flying fox weight limit", "zipline weight limit"]
+    },
+    {
+      "title": "Top Bungee Jumping Spots Rishikesh",
+      "url": "https://www.bucketlistt.com/blogs/top-bungee-jumping-spots-rishikesh",
+      "keywords": ["bungee spots", "top bungee locations"]
+    },
+    {
+      "title": "Best Adventure Sports Destinations India",
+      "url": "https://www.bucketlistt.com/blogs/best-adventure-sports-destinations-india",
+      "keywords": ["adventure destinations india", "top sports spots india"]
+    }
+  ],
+
+  "general_cta": {
+    "url": "https://www.bucketlistt.com/rishikesh",
+    "title": "🏔️ Plan Your Rishikesh Adventure",
+    "text": "Discover and book the best adventure activities, cultural experiences, and stays in Rishikesh — all verified, certified, and available with instant confirmation on Bucketlistt!",
+    "button_text": "Explore All Rishikesh Activities",
+    "button_color": "#ff5a5f"
+  }
+}

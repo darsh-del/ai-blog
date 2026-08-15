@@ -1,0 +1,429 @@
+{
+  "scraped_at": "2026-06-09T09:14:00Z",
+  "verified_by": "Antigravity Research Agent",
+  "scraped_snippets": [
+    "Rishikesh or Hrishikesh is a municipal corporation and tehsil of the Dehradun district of the Indian state Uttarakhand. It is situated on the right bank of the Ganges river and is a pilgrimage town for Hindus associated with famous sages and yogis. The city has hosted the International Yoga Festival annually since 1999, giving it the nickname of Yoga Capital of the World. Rishikesh is a vegetarian-only and alcohol-free city."
+  ],
+  "categories": {
+    "river_rafting": {
+      "things_to_carry": [
+        "Quick-dry synthetic clothing (polyester/nylon T-shirts and shorts). Avoid cotton as it holds water and gets cold.",
+        "Secure footwear with heel straps (strapped sandals or sports shoes that can get wet). Do not wear loose flip-flops.",
+        "Sunscreen (apply before rafting), sunglasses with a retainer/strap, and a dry towel/change of clothes kept in the transfer vehicle.",
+        "Waterproof phone pouch (if carrying phone, though leaving it behind is highly recommended).",
+        "Water bottle (reusable) to stay hydrated."
+      ],
+      "things_to_keep_in_mind": [
+        "Strictly prohibited for pregnant women, individuals with severe asthma, heart disease, epilepsy, or recent surgeries.",
+        "Listening carefully to the mandatory pre-trip safety briefing by the guide is non-negotiable.",
+        "Life jacket (PFD) and helmet must be worn snugly at all times on the water. Do not loosen them for comfort.",
+        "Never stand up in fast-moving water due to foot entrapment hazards. Keep feet downstream if you fall in.",
+        "Always hold the paddle correctly with one hand on the T-grip to avoid hitting other crew members."
+      ],
+      "rafting_9km": {
+        "route": "Brahmpuri to NIM Beach",
+        "actual_river_distance": "9 km",
+        "duration": "1.5 to 2 hours",
+        "grade": "Grade I & II (Easy/Basic)",
+        "notable_rapids": "Sweet Sixteen (Grade II), Black Money (Grade I), Double Trouble (Grade II)",
+        "recommendation": "Best suited for families, children, senior citizens, and first-time beginners seeking a gentle introduction to rafting."
+      },
+      "rafting_16km": {
+        "route": "Shivpuri to NIM Beach / Rishikesh",
+        "actual_river_distance": "16 km",
+        "duration": "2.5 to 3 hours",
+        "grade": "Grade II & III (Moderate/Standard)",
+        "notable_rapids": "Roller Coaster (Grade III), Golf Course (Grade III), Club House (Grade II), Double Trouble (Grade II)",
+        "recommendation": "The most popular rafting route in Rishikesh. Perfect for active groups and beginners seeking moderate thrills and high wave action."
+      },
+      "rafting_24km": {
+        "route": "Marine Drive to NIM Beach",
+        "actual_river_distance": "24 km",
+        "duration": "3.5 to 4.5 hours",
+        "grade": "Grade III & III+ (Challenging)",
+        "notable_rapids": "Three Blind Mice (Grade III), Crossfire (Grade III), Roller Coaster (Grade III), Golf Course (Grade III)",
+        "recommendation": "Recommended for adventure lovers with strong physical stamina. Requires continuous paddling effort through multiple consecutive rapids."
+      },
+      "rafting_35km": {
+        "route": "Kaudiyala to NIM Beach / Rishikesh",
+        "actual_river_distance": "Approximately 35 km depending on water levels and take-out point",
+        "duration": "4 to 6 hours on the water",
+        "grade": "Grade III+, IV (Challenging/Advanced)",
+        "notable_rapids": "The Wall (Grade IV, high risk of flip), Daniel's Dip, Three Blind Mice, Golf Course",
+        "recommendation": "Best suited for experienced rafters or active adventure seekers. Requires strong paddling effort and good physical fitness."
+      },
+      "rafting_100km": {
+        "route": "Multi-day expedition from Bhagwan to Rishikesh",
+        "actual_river_distance": "100 km",
+        "duration": "Typically 3 to 4 days",
+        "grade": "Grade III - IV",
+        "notable_rapids": "Multiple major rapids (including Golf Course and Roller Coaster) & beach camping",
+        "camping": "Combines river rafting with beach camping on remote white sands along the Ganga",
+        "highlights": "Pristine nature, remote canyons, campfire cooking, multi-day endurance challenge, and negotiating massive Grade III & IV rapids (such as Golf Course and Roller Coaster)"
+      },
+      "everything_to_know": {
+        "season": "September to June (rafting is strictly closed during the monsoon season from July 1st to August 31st)",
+        "grades_explained": "Grade I (Easy, Brahmpuri 9km), Grade II & III (Moderate, Shivpuri 16km), Grade III & III+ (Challenging, Marine Drive 26km), Grade III-IV+ (Advanced, Kaudiyala 35km)",
+        "guideline_verifications": "Ensure the operator is licensed by the Uttarakhand Tourism Department and has certified guides. A safety kayaker is strictly required to accompany rapid runs from Marine Drive and Kaudiyala."
+      }
+    },
+    "bungee_jumping": {
+      "safety_rules": [
+        "Minimum age of 12 years is strictly enforced. Consent of parents/guardians is mandatory for minors under 18.",
+        "Weight range is strictly 35/40 kg to 110/120 kg (depending on operator harnesses). No exceptions are allowed.",
+        "Strictly prohibited for people with heart conditions, high blood pressure, neck/back injuries, epilepsy, recent surgeries, or pregnancy.",
+        "Alcohol or drug consumption prior to jumping is strictly prohibited; breathalyzer checks are conducted at the site."
+      ],
+      "jump_types": [
+        {
+          "type_name": "Normal / Classic Bungee Jump",
+          "description": "The standard head-first plunge from a fixed cantilever platform with the harness secured to your ankles and a backup body harness. Offers a pure free fall feeling followed by soft rebounds."
+        },
+        {
+          "type_name": "Freestyle Bungee Jump",
+          "description": "Available at select high platforms (like Himalayan Bungee and Splash Bungee). Allows experienced jumpers or those with high confidence to perform front flips, back flips, running jumps, or other customized body maneuvers."
+        },
+        {
+          "type_name": "Tandem / Couple Bungee Jump",
+          "description": "Two jumpers are harnessed together side-by-side or back-to-back and dive simultaneously. Available at Himalayan Bungee's 111-meter platform, subject to a strict combined weight limit of 180 kg."
+        },
+        {
+          "type_name": "Water Splash Bungee Jump",
+          "description": "A thrill-dense variation where the bungee cord is calibrated to let the jumper's head or hands briefly touch or dip into a custom water body or pool at the bottom of the fall. Heavily promoted at Splash Bungee Shivpuri (109m)."
+        }
+      ],
+      "operators": [
+        {
+          "name": "Jumpin Heights (Mohan Chatti)",
+          "height": "83 meters",
+          "price_inr": "₹4,500 per jump (excluding transport & entry fee)",
+          "highlights": "India's first fixed-platform bungee. Designed and operated by New Zealand jump masters following high safety regulations.",
+          "logistics": "Located in Mohan Chatti (~15 km from Tapovan). Entry fee is ₹100. Optional AC coach transfers from Tapovan are available for ₹300-₹500."
+        },
+        {
+          "name": "Himalayan Bungee (Shivpuri)",
+          "height": "117 meters (Normal) and 111 meters (Freestyle/Tandem)",
+          "price_inr": "₹5,000 for 117m Normal; ₹4,000 for 111m Freestyle; ₹8,000 for 111m Tandem/Couple",
+          "highlights": "Offers some of the highest fixed-platform jumps in Rishikesh. Packages typically include office transfers from Tapovan and a free DSLR video of the jump.",
+          "logistics": "Located in Shivpuri. Weight limit is 45-110 kg solo, up to 180 kg combined for tandem."
+        },
+        {
+          "name": "Splash Bungee / Splash Bungy (Shivpuri)",
+          "height": "109 meters",
+          "price_inr": "₹3,500 - ₹4,000 (often discounted/promo to ₹3,499)",
+          "highlights": "India's highest water splash bungee jump, offering the thrill of dipping into a water pool at the lowest point.",
+          "logistics": "Located in Shivpuri. Weight limit is 45-110 kg, age limit is 12-55 years."
+        }
+      ]
+    },
+    "other_adventure_sports": {
+      "giant_swing": {
+        "description": "A massive pendulum swing where you are harnessed to a rope and drop from a high platform, swinging in a giant arc over a valley.",
+        "locations_and_operators": [
+          {
+            "name": "Jumpin Heights (Mohan Chatti)",
+            "height": "83 meters",
+            "price_inr": "₹3,550 - ₹4,000 for Solo; ₹6,800 - ₹7,000 for Tandem/Couple",
+            "limits": "Age 12+ years, weight range 30-120 kg (solo) or max 160-180 kg combined (tandem)."
+          },
+          {
+            "name": "Thrill Factory / Splash Bungee (Shivpuri)",
+            "height": "55 meters",
+            "price_inr": "₹1,500 - ₹2,500",
+            "limits": "Age 12+ years, weight range 30-110 kg."
+          }
+        ]
+      },
+      "flying_fox_zipline": {
+        "description": "Zipping across a valley or river on a high-tension steel cable while suspended in a harness. Can be done solo or in tandem/triple.",
+        "locations_and_operators": [
+          {
+            "name": "Jumpin Heights (Mohan Chatti) - Flying Fox",
+            "length": "1 km (120 meters high)",
+            "price_inr": "₹1,800 - ₹2,000 (if booked in tandem/triple), ₹3,000 (for Solo)",
+            "limits": "Age 12+ years, weight range 35-130 kg. Speeds up to 140-160 km/h.",
+            "notes": "Superman-style chest-down harness."
+          },
+          {
+            "name": "Flying Fox Rishikesh / Snow Leopard (Shivpuri) - Ganga Zipline",
+            "length": "825 meters total (two-way river crossing, ~70 meters high)",
+            "price_inr": "₹1,800 - ₹2,000",
+            "limits": "Age 10+ years, weight range 20-100 kg. Zips right over the rapids of the Ganges."
+          },
+          {
+            "name": "Thrill Factory (Shivpuri) - Roller Coaster Zipline",
+            "length": "Varies",
+            "price_inr": "₹1,500 - ₹1,800",
+            "limits": "Age 12+ years, weight range 30-110 kg.",
+            "notes": "A curved overhead rail track that simulates the twists and dips of a roller coaster while zipping."
+          }
+        ]
+      },
+      "paragliding": {
+        "description": "Gliding through the air with a wide canopy, launching from mountain hills to soar over the Ganga valley and landing in designated areas.",
+        "flight_packages": [
+          {
+            "name": "Classic Flight",
+            "duration": "5 to 15 minutes",
+            "price_inr": "₹3,500 - ₹5,500",
+            "best_for": "Beginners seeking a scenic starter flight."
+          },
+          {
+            "name": "Explorer Flight",
+            "duration": "20 to 35 minutes",
+            "price_inr": "₹6,990 - ₹10,990",
+            "best_for": "Gliding enthusiasts wanting a longer thermalling experience."
+          },
+          {
+            "name": "Expedition / Valley Crossing",
+            "duration": "Up to 70 minutes",
+            "price_inr": "₹15,000 - ₹20,000",
+            "best_for": "A high-altitude, cross-country flying experience."
+          }
+        ],
+        "logistics": {
+          "locations": "Mazri Grant / Doiwala Airfield (near Dehradun highway) or New Tehri.",
+          "limits": "Weight 30-95 kg (up to 105 kg depending on wind), age 12-65 years. Medical fitness is required."
+        }
+      },
+      "rope_jump": {
+        "description": "Often referred to as Valley Rope Jump, a high-thrill swing where you drop from a platform and are caught by a dynamic rope setup to swing in a giant arc.",
+        "locations_and_operators": [
+          {
+            "name": "Jumpin Heights (Mohan Chatti)",
+            "height": "83 meters",
+            "price_inr": "₹3,700 - ₹4,500 for Solo; ₹6,800 - ₹7,000 for Couples",
+            "limits": "Age 12-45/55 years, weight range 30-110 kg (solo) or max 160-180 kg combined (tandem)."
+          }
+        ]
+      }
+    },
+    "things_to_do": {
+      "food_and_cafes": [
+        {
+          "name": "Little Buddha Cafe",
+          "type": "Cafe",
+          "highlights": "Treehouse vibe, multi-cuisine, excellent river views of Laxman Jhula, relaxed backpacker atmosphere"
+        },
+        {
+          "name": "Beatles Cafe (The 60's Cafe)",
+          "type": "Cafe",
+          "highlights": "Beatles theme, organic and healthy food options, overlooking the Ganga river"
+        },
+        {
+          "name": "Freedom Cafe",
+          "type": "Cafe",
+          "highlights": "Laxman Jhula area, cozy floor seating, wide selection of continental food and river views"
+        },
+        {
+          "name": "Ramana's Organic Cafe",
+          "type": "Cafe",
+          "highlights": "Organic, fresh farm-to-table vegetables grown locally, proceeds support a children's home"
+        },
+        {
+          "name": "Bistro Nirvana",
+          "type": "Cafe",
+          "highlights": "Chill vibes, bamboo cabins, organic pizzas, and local herbal teas"
+        },
+        {
+          "name": "Bhumi Cafe",
+          "type": "Cafe",
+          "highlights": "Eco-friendly cafe with excellent vegan, gluten-free options and peaceful garden seating"
+        },
+        {
+          "name": "Skyard Cafe",
+          "type": "Cafe",
+          "highlights": "Rooftop views overlooking Laxman Jhula, woodfired pizzas, and vibrant traveler community hangouts"
+        },
+        {
+          "name": "Live Free Cafe",
+          "type": "Cafe",
+          "highlights": "Tapovan community hub offering healthy organic food, live acoustic music, and coworking spaces"
+        }
+      ],
+      "places_to_visit": [
+        {
+          "name": "Triveni Ghat",
+          "description": "The largest and most sacred bathing ghat in Rishikesh, famous for the daily sunset Ganga Aarti and holy dips."
+        },
+        {
+          "name": "Parmarth Niketan Ashram",
+          "description": "One of the most prominent ashrams in Rishikesh, known for its spiritual activities, yoga programs, and organized evening aarti."
+        },
+        {
+          "name": "The Beatles Ashram (Chaurasi Kutia)",
+          "description": "The ruins of Maharishi Mahesh Yogi's ashram where The Beatles stayed in 1968; features beautiful graffiti art, meditation domes, and forest walks."
+        },
+        {
+          "name": "Laxman Jhula & Ram Jhula",
+          "description": "Iconic iron suspension bridges connecting the eastern and western banks of the Ganga. Laxman Jhula has pedestrian restrictions; pedestrian traffic is routed to Ram Jhula or the new glass-floor Bajrang Setu."
+        },
+        {
+          "name": "Bajrang Setu",
+          "description": "India's first glass-floor suspension bridge designed to replace Laxman Jhula. Structurally complete in 2026, but undergoing final crowd control audits and glass panel checks before public opening."
+        },
+        {
+          "name": "Kunjapuri Devi Temple",
+          "description": "A high-altitude temple (1676m) famous for panoramic Himalayan sunrise views and a downhill forest trek option."
+        },
+        {
+          "name": "Neer Garh & Garud Chatti Waterfalls",
+          "description": "Multi-tiered natural waterfalls offering refreshing pools and short jungle hikes close to Tapovan."
+        },
+        {
+          "name": "Vashishta Gufa",
+          "description": "An ancient, silent cave situated on the banks of the Ganges 25 km upstream where Sage Vashishta meditated; ideal for silent reflection."
+        },
+        {
+          "name": "Patna Waterfall",
+          "description": "A peaceful offbeat waterfall near Patna Village. Requires a scenic 45-minute trek through a dense forest; features natural rock pools and is far less commercialized."
+        },
+        {
+          "name": "Garud Chatti Waterfall",
+          "description": "Secluded waterfall near Neelkanth road, perfect for quiet afternoon picnics and refreshing dips away from main tourist zones."
+        },
+        {
+          "name": "Phool Chatti Waterfall",
+          "description": "Quiet cascade situated along the Neelkanth temple trail, surrounded by rich natural greenery and serene mountain views."
+        }
+      ]
+    },
+    "ganga_aarti": {
+      "triveni_ghat": {
+        "vibe": "High-energy, grand, festival-like gathering of local devotees and travelers",
+        "features": "Rhythmic Vedic chants, large oil lamps, floating of flower-and-leaf diyas on the river",
+        "timings_2026": {
+          "summer": "6:00 PM - 7:00 PM",
+          "winter": "5:30 PM - 6:30 PM"
+        },
+        "tips": "Arrive 45 minutes early to secure a seat on the steps. Morning aarti also occurs daily at ~5:45 AM."
+      },
+      "parmarth_niketan": {
+        "vibe": "Structured, serene, deeply spiritual and meditative ashram setting",
+        "features": "Vedic chanting led by ashram Gurukuls, devotional bhajans, yagna (fire ceremony) starting 30 minutes before sunset",
+        "timings_2026": {
+          "summer": "5:30 PM - 6:30 PM",
+          "winter": "5:00 PM - 6:00 PM"
+        },
+        "rules": "Modest dress code (shoulders and knees covered) is strictly enforced within the ashram premises."
+      }
+    },
+    "hotels_hostels": {
+      "hostels": [
+        {
+          "name": "The Hosteller Rishikesh Ganges",
+          "location": "Laxman Jhula",
+          "range_inr": "850 - 1300",
+          "highlights": "Rooftop cafe, direct Ganges views, highly social, coworking space"
+        },
+        {
+          "name": "goSTOPS Rishikesh",
+          "location": "Laxman Jhula / Jonk",
+          "range_inr": "900 - 1800",
+          "highlights": "Vibrant indoor common areas, quiet location, yoga deck"
+        },
+        {
+          "name": "Zostel Rishikesh",
+          "location": "Laxman Jhula / Jonk",
+          "range_inr": "1600+",
+          "highlights": "Reliable Zostel standards, mountain view common areas, guided local tours"
+        },
+        {
+          "name": "goSTOPS PLUS Rishikesh",
+          "location": "Tapovan",
+          "range_inr": "800 - 1600",
+          "highlights": "Backpacker hotel with a rooftop pool, spacious rooms, modern design"
+        },
+        {
+          "name": "Shalom Backpackers",
+          "location": "Tapovan",
+          "range_inr": "1100 - 1500",
+          "highlights": "Live music nights, bonfire area, close to top cafes in Tapovan"
+        },
+        {
+          "name": "Skyard Hostel",
+          "location": "Laxman Jhula",
+          "range_inr": "800 - 1400",
+          "highlights": "Social backpackers hostel with a panoramic rooftop cafe, walking tours, and lively music nights"
+        },
+        {
+          "name": "Live Free Hostel Tapovan",
+          "location": "Tapovan",
+          "range_inr": "750 - 1200",
+          "highlights": "Highly active community hostel organizing social treks (like sunrise Kunjapuri), yoga, and regular bonfires"
+        },
+        {
+          "name": "Joey's Hostel Rishikesh",
+          "location": "Laxman Jhula",
+          "range_inr": "900 - 1500",
+          "highlights": "Premium terrace with excellent Ganges views, clean facilities, and a relaxing traveler vibe"
+        }
+      ],
+      "hotels": [
+        {
+          "name": "Aloha on the Ganges",
+          "type": "Luxury Resort",
+          "location": "Tapovan",
+          "highlights": "Premium river-facing rooms, infinity pool, spa, extensive gardens, high-end family resort"
+        },
+        {
+          "name": "Tapovan New Residency",
+          "type": "3-Star Hotel",
+          "location": "Tapovan",
+          "highlights": "Balconied rooms with mountain views, on-site spa, family-friendly, 5 mins walk to Laxman Jhula area"
+        },
+        {
+          "name": "Kunwar Residency",
+          "type": "3-Star Hotel",
+          "location": "Laxman Jhula",
+          "highlights": "Located right near the riverbank, clean rooms, quick access to local shopping and dining"
+        },
+        {
+          "name": "Serenity Hotel Rishikesh",
+          "type": "Budget 3-Star",
+          "location": "Laxman Jhula",
+          "highlights": "Simple, comfortable rooms, clean amenities, budget-friendly residency for couples and families"
+        },
+        {
+          "name": "Ananda in the Himalayas",
+          "type": "Ultra-Luxury Wellness Estate",
+          "location": "Narendra Nagar",
+          "highlights": "Located on a 100-acre Maharaja palace estate, world-renowned Ayurvedic treatments, yoga programs, and mountain views"
+        },
+        {
+          "name": "Taj Rishikesh Resort & Spa",
+          "type": "5-Star Luxury Resort",
+          "location": "Singtali",
+          "highlights": "Private white sand Ganga beach access, architecture mirroring Himalayan foothills, premium spa, and isolated fine dining"
+        },
+        {
+          "name": "Anand Kashi by the Ganges (IHCL)",
+          "type": "Luxury Boutique Resort",
+          "location": "Ganga Valley",
+          "highlights": "Private Ganga beach, daily riverside yoga sessions, farm-to-table organic dining, and private ashram aarti experiences"
+        }
+      ]
+    },
+    "how_to_reach": {
+      "by_air": {
+        "airport": "Jolly Grant Airport (DED), Dehradun",
+        "distance": "Approximately 20-25 km from Rishikesh",
+        "connectivity": "Daily flights from Delhi, Mumbai, Bengaluru, Lucknow, and Ahmedabad",
+        "onward_travel": "Pre-paid taxis (~₹800 to ₹1200) or local buses from the highway outside the airport"
+      },
+      "by_train": {
+        "local_stations": "Yog Nagari Rishikesh (YNRK) and Rishikesh Railway Station (RKSH)",
+        "major_hub": "Haridwar Junction (HW) is 25 km away and offers direct train connectivity to all major Indian cities",
+        "haridwar_to_rishikesh": "Take a shared auto (₹50-₹80), a state transport bus (₹45, 1 hour), or a private taxi (₹800-₹1200)",
+        "train_connectivity_updates": "No direct Vande Bharat train to Rishikesh station. Delhi-Dehradun Vande Bharat stops at Haridwar. Future proposals include extending the Namo Bharat (RRTS) from Meerut to Rishikesh (reducing Delhi-Rishikesh transit to 2.5 hours)."
+      },
+      "by_road": {
+        "bus_connectivity": "Frequent state and private AC sleeper/semi-sleeper buses from Kashmere Gate ISBT, Delhi (6-7 hours journey)",
+        "driving": "NH 58 highway via Meerut bypass and Muzaffarnagar. Best to start from Delhi around 4:00 AM to avoid town bottlenecks at Haridwar bypass."
+      },
+      "infrastructure_updates_2026": {
+        "karnaprayag_railway_project": "The completion timeline of the 125-km Rishikesh-Karnaprayag rail line has been revised to 2028 due to complex engineering and extensive tunneling (85% of the route is underground). Constructing the massive Tunnel 8 (Devprayag to Janasu) is a key milestone."
+      }
+    }
+  }
+}

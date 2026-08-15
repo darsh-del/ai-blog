@@ -1,0 +1,11 @@
+{
+    "mapping": {
+        "service_name": "Service Name",
+        "category": "Category",
+        "price_inr": "Price (INR)",
+        "location": "Location",
+        "key_features": "Key Features",
+        "details": "Details"
+    },
+    "id_column": "service_name"
+}
