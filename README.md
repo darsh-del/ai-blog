@@ -8,27 +8,27 @@ This project is a high-performance content generation engine designed to scrape 
 - **[Article Generation Process](documentation/ARTICLE_GENERATION_PROCESS.md)** - Complete guide to the two-step LLM workflow
 - **[Environment Configuration](documentation/ENV_CONFIGURATION.md)** - Comprehensive `.env` variable reference
 
-## 🚀 Quick Start (Docker)
+## 🚀 Quick Start
 
 1.  **Configure Environment**:
     Copy `example.env` to `.env` and fill in your API keys:
     ```bash
     cp example.env .env
     ```
-    Ensure you set `GOOGLE_AI_STUDIO_API_KEY` and review the new settings like `MAX_TOTAL_ARTICLES`.
+    Set `OPENAI_API_KEY` (default LLM provider) and `GOOGLE_AI_STUDIO_API_KEY` (used for Imagen hero images), and review settings like `MAX_TOTAL_ARTICLES`.
 
-2.  **Start the System**:
+2.  **Install dependencies**:
     ```bash
-    docker compose up -d --build
+    pip install -r requirements.txt
     ```
 
-3.  **Check Status**:
+3.  **Run a campaign**:
     ```bash
-    docker compose ps
+    python generate_and_email.py
     ```
+    This generates a batch of SEO-graded articles and emails them via the SMTP settings in `.env`.
 
-4.  **Access API**:
-    Open your browser to: `http://localhost:8000/docs`
+> ⚠️ **No API server in this snapshot**: `Dockerfile`/`docker-compose.yml` start `uvicorn api.main:app`, but there is no `api/` package in the codebase — the Docker path won't boot as-is. Run the pipeline via the top-level scripts (`generate_and_email.py`, `gather_rishikesh_premium_data.py`, `generate_index.py`) until an API module is added.
 
 ---
 
@@ -47,7 +47,7 @@ This project is a high-performance content generation engine designed to scrape 
     *   Provides a financial cost breakdown per campaign.
 *   **Global Limits**: Set a hard cap (e.g., 5000 articles) in `.env` to prevent the database from growing indefinitely.
 *   **Competitor Scraping**: Intelligent scraper that learns from competitor blogs to generate relevant titles.
-*   **Multi-Platform Publishing**: Automatically publish to WordPress, Blogger, and Tumblr.
+*   **WordPress Publishing**: Automatically publish generated articles to WordPress via the REST API.
 
 ---
 
@@ -56,9 +56,9 @@ This project is a high-performance content generation engine designed to scrape 
 The `.env` file is like the "control panel" of your blog generator. Here is what you need to change to make it work for your business:
 
 ### 1. Essential API Keys
-*   **`GOOGLE_AI_STUDIO_API_KEY`**: This is your "Writer's Brain". You need a Google AI Studio (Gemini) API key to generate articles.
-*   **`GOOGLE_AI_STUDIO_API_KEY`**: This is also your "Artist's Brain" for image generation (if enabled).
-*   **`API_KEY`**: This is a security password you create for your own API server to prevent unauthorized access.
+*   **`OPENAI_API_KEY`**: This is your "Writer's Brain" — text generation routes through LiteLLM and defaults to OpenAI (`LLM_MODEL=gpt-4o-mini`). Swap providers (Gemini, Anthropic, ...) by changing `LLM_MODEL` and its matching key — no code changes needed. See [LLM Provider Migration](documentation/LLM_PROVIDER_MIGRATION.md).
+*   **`GOOGLE_AI_STUDIO_API_KEY`**: This is your "Artist's Brain" — still required for hero image generation (Imagen), regardless of which text provider you pick.
+*   **`API_KEY`**: This is a security password you create for your own API server to prevent unauthorized access (only relevant once an `api/` service exists — see Quick Start).
 
 ### 2. Branding (Tell the AI who you are)
 *   **`BRAND_NAME`**: Your company name (e.g., "Generic Solutions").
@@ -80,19 +80,19 @@ The `.env` file is like the "control panel" of your blog generator. Here is what
 
 ## 🛠️ How to Make This Work (Step-by-Step)
 
-1.  **Key Setup**: Paste your OpenAI and Gemini keys into `.env`.
+1.  **Key Setup**: Paste your OpenAI and Google AI Studio (Gemini) keys into `.env`.
 2.  **Product List**: Add your products to `data/products.csv` (one per line). These will be used for "Brand" articles.
 3.  **Categories**: Update `data/config/categories.json` with the topics you want to write about.
 4.  **Keywords**: Update `data/config/keywords.json` with words people search for in your industry.
-5.  **Run**: Launch with Docker (`docker compose up -d`) and start a campaign via the API docs at `http://localhost:8000/docs`.
+5.  **Run**: `python generate_and_email.py` to generate and email a batch of articles (see Quick Start above).
 
 ---
 
 ## 🛠️ Tech Stack
 
 *   **Core**: Python 3.9+
-*   **AI**: LiteLLM (OpenAI GPT-4), Google Gemini (Images)
-*   **Web**: FastAPI
+*   **AI**: LiteLLM (default OpenAI `gpt-4o-mini`, swappable to Gemini/Anthropic/etc.), Google Gemini Imagen (images)
+*   **Web**: FastAPI (declared in `Dockerfile`/`requirements.txt`; no `api/` package exists yet in this codebase)
 *   **Scraping**: Undetected Chromedriver, Selenium
 *   **Vector DB**: Weaviate (Optional)
 
@@ -128,7 +128,7 @@ The orchestrator manages the entire workflow using a **revolutionary two-step LL
 
 ### 🔄 Complete Workflow
 
-1.  **Initiation**: You start a campaign via the API (`POST /campaign/run`).
+1.  **Initiation**: You start a campaign by running a script (e.g. `python generate_and_email.py`) — there is no live API endpoint in this codebase yet.
 2.  **Scraping**: The system scrapes competitor blogs to learn trending topics and keywords.
 3.  **Workers**: Use a thread pool to run multiple "Writers" at once.
 4.  **Two-Step Drafting**:
@@ -139,7 +139,7 @@ The orchestrator manages the entire workflow using a **revolutionary two-step LL
     - If score < `SEO_THRESHOLD`, it sends specific feedback back to the Writer.
     - This repeats until the score is high enough or max retries reached.
 6.  **Tracking**: If a worker fails, the `ConcurrentCampaignManager` immediately spawns a new one to ensure your target count is met.
-7.  **Publication**: Final articles are saved to `data/output/json`, logged in `data/database/articles.csv`, and optionally published to WordPress/Blogger/Tumblr.
+7.  **Publication**: Final articles are saved to `data/output/json`, logged in `data/database/articles.csv`, and optionally published to WordPress.
 
 ### 📊 Quality Metrics
 

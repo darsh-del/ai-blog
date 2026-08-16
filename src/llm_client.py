@@ -225,6 +225,19 @@ def _log_model_switch(
                 next_model,
                 task_name
             )
+            # Real error (bad key, out of credits, model not found, ...) forced a
+            # provider fallback — worth a human's attention, unlike a 429 backoff.
+            from src.services.alert_service import send_error_alert  # deferred: avoids src.services <-> src.llm_client import cycle
+            send_error_alert(
+                alert_key=f"llm_switch:{attempt_model}",
+                subject=f"LLM fallback triggered ({attempt_model} → {next_model})",
+                message=(
+                    f"Task: {task_name}\n"
+                    f"Failed model: {attempt_model}\n"
+                    f"Falling back to: {next_model}\n"
+                    f"Error: {ex}"
+                ),
+            )
     else:
         if is_429:
             logger.warning(
@@ -372,6 +385,17 @@ def call_llm(
             f"Primary: {primary_model}. Fallbacks tried: {fallbacks_tried}. "
             f"Last error: {last_error}"
         )
+    from src.services.alert_service import send_error_alert  # deferred: avoids src.services <-> src.llm_client import cycle
+    send_error_alert(
+        alert_key=f"llm_exhausted:{primary_model}",
+        subject=f"All LLM providers failed ({primary_model})",
+        message=(
+            f"Task: {config.task_name}\n"
+            f"Primary model: {primary_model}\n"
+            f"Models tried: {filtered_models}\n"
+            f"Last error: {last_error}"
+        ),
+    )
     raise RuntimeError(
         f"[GENERATION_FAILED] All models failed for task '{config.task_name}'. Last error: {last_error}"
     )

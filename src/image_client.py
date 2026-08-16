@@ -164,6 +164,16 @@ def generate_blog_image(prompt: str) -> Tuple[Optional[bytes], float]:
                 break
 
     logger.warning("All image generation models failed.")
+    from src.services.alert_service import send_error_alert  # deferred: avoids src.services <-> src.image_client import cycle
+    send_error_alert(
+        alert_key=f"image_exhausted:{primary_model}",
+        subject=f"Image generation failed ({primary_model})",
+        message=(
+            f"Primary image model: {primary_model}\n"
+            f"Models tried: {models_to_try}\n"
+            "All models failed or returned no image data — check the API key/model config."
+        ),
+    )
     return None, 0.0
 
 

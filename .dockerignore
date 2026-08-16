@@ -1,4 +1,7 @@
 .git
+# macOS AppleDouble resource-fork files (show up on external/network volumes);
+# Docker Desktop's build-context sender chokes on their xattrs otherwise.
+._*
 __pycache__
 *.pyc
 *.pyo

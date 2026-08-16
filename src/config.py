@@ -405,6 +405,12 @@ class Config:
     # Must match the live site's real permalink structure so canonical URLs are accurate for SEO.
     BLOG_URL_PATH = os.getenv("BLOG_URL_PATH", "blogs").strip("/")
 
+    # Second LLM pass that rewrites the final, SEO-passing draft to reduce statistical
+    # AI-writing tells (token-level predictability that AI detectors key on). Runs once,
+    # only on the winning draft — costs one extra LLM call per article. Fails safe: a
+    # rewrite that fails its structural sanity check is discarded, original is kept.
+    ENABLE_HUMANIZE_PASS = os.getenv("ENABLE_HUMANIZE_PASS", "True").lower() == "true"
+
     # Scraper Configuration
     SCRAPER_RAW_MODE = os.getenv("SCRAPER_RAW_MODE", "0") == "1"
     SCRAPER_PAGE_LOAD_TIMEOUT = int(os.getenv("SCRAPER_PAGE_LOAD_TIMEOUT", "30"))
@@ -473,6 +479,10 @@ class Config:
     SMTP_TO = os.getenv("SMTP_TO", "prachi@bucketlistt.com")
     SMTP_CC = os.getenv("SMTP_CC", "founder@bucketlistt.com, divyam.shah@bucketlistt.com, nitant.desai@bucketlistt.com")
     SMTP_BCC = os.getenv("SMTP_BCC", "")
+    # Ops alert recipient: notified only on real pipeline failures (provider fallback due to
+    # a non-rate-limit error, all LLM fallbacks exhausted, image generation failing outright).
+    # Sent from SMTP_USERNAME, same as the regular article-delivery emails.
+    ALERT_EMAIL_TO = os.getenv("ALERT_EMAIL_TO", "10102003darsh@gmail.com, divyam.shah@bucketlistt.com")
 
     @classmethod
     def reload_env(cls):
@@ -485,6 +495,7 @@ class Config:
         cls.SMTP_TO = os.getenv("SMTP_TO", "prachi@bucketlistt.com")
         cls.SMTP_CC = os.getenv("SMTP_CC", "founder@bucketlistt.com, divyam.shah@bucketlistt.com, nitant.desai@bucketlistt.com")
         cls.SMTP_BCC = os.getenv("SMTP_BCC", "")
+        cls.ALERT_EMAIL_TO = os.getenv("ALERT_EMAIL_TO", "10102003darsh@gmail.com, divyam.shah@bucketlistt.com")
 
     @classmethod
     def get_smtp_to(cls) -> str:
