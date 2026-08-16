@@ -315,6 +315,34 @@ def _get_content_requirements(is_brand_article: bool, category: str) -> str:
     """
 
 
+def _get_human_voice_block() -> str:
+    """
+    Style constraints aimed at natural sentence-rhythm variation and avoiding the
+    stock vocabulary/openers that make AI-written text read as flat and uniform
+    (low perplexity/burstiness). Google doesn't rank by "AI-detector score" — it
+    ranks by content quality and E-E-A-T — but flat, repetitive phrasing reads
+    poorly to real visitors regardless, so this is a genuine writing-quality ask.
+    """
+    return """
+    **WRITING VOICE — SOUND LIKE A PERSON, NOT A TEMPLATE:**
+    - Vary sentence length deliberately. Do NOT write every sentence at a similar length.
+      Cluster it the way people actually talk: two or three short, punchy sentences,
+      then one longer sentence that threads a more complex idea, then short again.
+      A paragraph where every sentence is 15-20 words is a dead giveaway of AI writing.
+    - Vary how sections and paragraphs open. Do NOT start consecutive H2/H3 sections
+      or paragraphs with the same sentence pattern (e.g. every section opening with
+      "When it comes to..." or "If you're looking to...").
+    - AVOID these overused AI-writing words and phrases entirely: delve, moreover,
+      furthermore, additionally, leverage, utilize, seamless(ly), robust, boast,
+      tapestry, realm, landscape (as a metaphor), underscore, testament to, embark on,
+      navigate the complexities, unlock, unleash, elevate, game-changer, cutting-edge,
+      in today's fast-paced world, in today's digital age, it's important to note,
+      it's worth noting, at the end of the day, in conclusion. Use plain words instead.
+    - Prefer concrete, specific detail (a real number, a named place, a practical tip)
+      over generic filler adjectives. Write like someone who has actually been there.
+    """
+
+
 def _get_content_structure(is_brand_article: bool) -> str:
     if is_brand_article:
         return f"""
@@ -543,6 +571,8 @@ def create_content_prompt(
 
     {_get_revision_instruction(reference_text)}
 
+    {_get_human_voice_block()}
+
     {_get_content_requirements(is_brand_article, category)}
 
     **ARTICLE SPECIFICATIONS:**
@@ -584,6 +614,51 @@ def create_content_prompt(
     {REJECTION_CRITERIA}
 
     {EXACT_OUTPUT_FORMAT}
+    """
+
+
+def create_humanize_prompt(content_html: str, target_keywords: List[str]) -> str:
+    """
+    Creates a prompt for a second pass that rewrites already-finished, SEO-passing
+    article HTML to reduce statistical AI-writing tells (uniform sentence length,
+    predictable phrasing) without touching anything downstream systems depend on:
+    heading text, hyperlinks, or keyword presence. The rewrite is verified against
+    the original by a structural check after this call — this prompt's job is just
+    to make that check likely to pass while genuinely varying the prose.
+    """
+    keywords_str = ", ".join(target_keywords) if target_keywords else "(none provided)"
+    return f"""
+    You are a human copy editor doing a final polish pass on a travel article that has
+    already been approved for publication. Your ONLY job is to make the prose read more
+    naturally human-written. Do not change facts, meaning, structure, or SEO elements.
+
+    **STRICT PRESERVATION RULES (breaking any of these fails the edit):**
+    - Do NOT change any heading text: every <h1>, <h2>, <h3> must be word-for-word identical.
+    - Do NOT change, remove, or add any <a href="..."> link — every link's href and position
+      must stay exactly as-is. You may lightly reword the visible anchor text only if the
+      surrounding sentence needs it, but never touch the href attribute.
+    - Do NOT add, remove, merge, or reorder <p>, <ul>, <ol>, <li> elements — same count, same order.
+    - Do NOT drop any of these keywords — every one must still appear at least once,
+      naturally, somewhere in the text: {keywords_str}
+    - Do NOT change overall word count by more than ~10%.
+    - Keep the exact same HTML tag structure. Only the wording INSIDE tags may change.
+
+    **WHAT TO ACTUALLY EDIT:**
+    - Vary sentence length within paragraphs — break up runs of similarly-sized sentences,
+      mix in a short sentence after a long one, the way a human editor tightens copy.
+    - Replace any leftover stiff/formal phrasing with how a real travel writer would say it.
+    - Remove these overused AI-writing words if present, replacing with plain language:
+      delve, moreover, furthermore, additionally, leverage, utilize, seamless(ly), robust,
+      boast, tapestry, realm, landscape (as metaphor), underscore, testament to, embark on,
+      navigate the complexities, unlock, unleash, elevate, game-changer, cutting-edge.
+    - Vary paragraph opening patterns — no two consecutive paragraphs should start the same way.
+
+    **ARTICLE HTML TO EDIT:**
+    {content_html}
+
+    **OUTPUT FORMAT:**
+    Return ONLY the complete, edited HTML. No commentary, no markdown code fences,
+    no explanation before or after. Start directly with the opening tag.
     """
 
 

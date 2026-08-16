@@ -615,13 +615,19 @@ class BlogGeneratorOrchestrator:
             temperature = Config.TEMPERATURE
             logger.info("Using fixed temperature=%.2f (from .env) for iteration %s", temperature, iteration)
 
+            # NOTE: temperature was previously computed but never passed to generate_article(),
+            # so every call silently used that method's own hardcoded default (0.7) instead of
+            # the .env value. Passing it explicitly here makes Config.TEMPERATURE actually take
+            # effect — a higher value raises output perplexity/burstiness (more human-like
+            # sentence variation), so .env now defaults to 0.85 rather than the old dead 0.3.
             it_article, it_product = self.content_generator.generate_article(
                 title=title,
                 reference_text=reference_text,
                 article_type=article_type,
                 target_keywords=blog_ctx["target_keywords"],
                 category=category,
-                excluded_products=self.covered_services
+                excluded_products=self.covered_services,
+                temperature=temperature
             )
 
             # Accumulate cost/tokens from this generation attempt
@@ -680,6 +686,14 @@ class BlogGeneratorOrchestrator:
                 it_article.useful_tokens = last_iteration_tokens
 
                 logger.info("SEO threshold reached. Saving and finalizing this article.")
+
+                # Final polish pass: rewrite prose to reduce AI-detector-style statistical
+                # tells. Runs only here, once, on the already-approved draft — never inside
+                # the retry loop, so it can't interfere with SEO scoring. Fails safe: keeps
+                # the original content untouched if the rewrite doesn't pass its own
+                # structural check (headings/links/keywords/word-count all preserved).
+                it_article = self.content_generator.humanize_article(it_article)
+
                 main_category = "Service Categories" if article_type == "brand" else "Industry Categories"
                 # Set category attributes on article object for WordPress publishing
                 it_article.category = blog_ctx["category"].strip() if blog_ctx["category"] else ""

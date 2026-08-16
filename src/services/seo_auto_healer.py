@@ -8,6 +8,7 @@ on the first attempt without relaxing the quality guardrails.
 from __future__ import annotations
 
 import logging
+import random
 import re
 from typing import List, Tuple
 
@@ -190,7 +191,17 @@ class SEOAutoHealer:
 
     @classmethod
     def _heal_faq_questions(cls, faq: str) -> str:
-        """Enforces that the FAQ section has at least 6 H3 questions."""
+        """
+        Enforces that the FAQ section has at least 6 H3 questions.
+
+        Pool is deliberately larger than any single article needs and is randomly
+        sampled + shuffled per call. The old version always injected the same first
+        N entries in the same order — identical boilerplate text pasted verbatim
+        across every under-quota article, which is both a duplicate-content risk
+        (Google's scaled-content-abuse signal) and a zero-burstiness AI-detector tell.
+        Random sampling from a wider pool doesn't eliminate repetition across a large
+        enough corpus, but it's a large reduction for a one-line change.
+        """
         h3_count = len(re.findall(r"<h3[^>]*>", faq, re.IGNORECASE)) if faq else 0
         city_name = Config.TARGET_CITY.strip()
         brand_name = Config.BRAND_NAME.strip()
@@ -226,11 +237,41 @@ class SEOAutoHealer:
                     f"Can I get photos or videos of my adventures in {city_name}?",
                     "Yes, most professional operators offer DSLR photography and high-definition GoPro video recording packages."
                 ),
+                (
+                    f"What is the cancellation or refund policy for activities in {city_name}?",
+                    f"Most operators booked through {brand_name} allow free rescheduling up to 24 hours before the slot, with refunds handled case-by-case for weather cancellations."
+                ),
+                (
+                    f"Do I need a minimum fitness level for adventure activities in {city_name}?",
+                    "Most activities need only basic fitness — the ability to walk short distances and swim isn't usually required, though operators will flag anything more demanding upfront."
+                ),
+                (
+                    f"Is transportation or pickup included when booking in {city_name}?",
+                    f"Some {brand_name} packages include pickup from central meeting points; check the specific activity listing, as it varies by operator and route distance."
+                ),
+                (
+                    f"What happens if the weather turns bad during my trip to {city_name}?",
+                    "Operators monitor conditions closely and will reschedule or relocate activities rather than run them unsafely — safety calls override the original itinerary."
+                ),
+                (
+                    f"Are group discounts available for activities in {city_name}?",
+                    f"Many operators offer reduced per-person rates for groups of 6 or more; ask about group pricing when booking through {brand_name}."
+                ),
+                (
+                    f"What should first-timers know before trying adventure sports in {city_name}?",
+                    "Arrive slightly early for the safety briefing, follow the guide's instructions exactly, and don't skip the gear-fitting check — it's there for a reason."
+                ),
+                (
+                    f"Is {city_name} suitable for a solo traveler?",
+                    f"Yes — {city_name} has a steady flow of solo adventure travelers, and most group activities are an easy way to meet people on the same trip."
+                ),
             ]
 
-            # Append only as many as needed to reach 6
+            # Sample randomly (not always the same first N) and shuffle the order,
+            # so repeated healing across articles doesn't paste identical text blocks.
             needed = 6 - h3_count
-            for q_text, a_text in questions_to_add[:needed]:
+            selected = random.sample(questions_to_add, min(needed, len(questions_to_add)))
+            for q_text, a_text in selected:
                 additional_faqs += f"\n<h3>{q_text}</h3>\n<p>{a_text}</p>"
 
             if not faq or "<div" not in faq:

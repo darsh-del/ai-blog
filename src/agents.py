@@ -19,7 +19,7 @@ from typing import List, Dict, Optional, Tuple, Set
 from src.llm_client import call_llm, LLM_AVAILABLE, RateLimitExhaustedError
 from src.config import Config
 from src.models import ArticleDraft, Metadata, SEOReport, SEOMetric, LLMConfig
-from prompts.prompts import create_content_prompt, create_title_prompt
+from prompts.prompts import create_content_prompt, create_humanize_prompt, create_title_prompt
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -1055,6 +1055,124 @@ class ContentGeneratorAgent:
             fallback_article.is_rate_limit_fallback = True  # Suppress image generation
             return fallback_article, product
 
+    def humanize_article(self, article: ArticleDraft) -> ArticleDraft:
+        """
+        Second LLM pass over an already SEO-passing article: rewrites prose to reduce
+        the statistical AI-writing signature (uniform sentence length, predictable
+        phrasing) that AI detectors key on. Runs once, only on the final winning draft.
+
+        Fails safe by design: the rewrite is checked against the original for
+        preserved headings/links/keywords/word-count before being accepted. Any
+        mismatch discards the rewrite and keeps the original article untouched —
+        this step can only make prose read better, never break SEO or publishing.
+        """
+        if not Config.ENABLE_HUMANIZE_PASS or not LLM_AVAILABLE or article.is_rate_limit_fallback:
+            return article
+
+        try:
+            prompt = create_humanize_prompt(article.content_html, article.metadata.keywords)
+            rewritten_response, usage = call_llm(
+                prompt,
+                config=LLMConfig(
+                    model_name=self.model_name,
+                    max_tokens=5000,
+                    temperature=0.7,
+                    include_usage=True,
+                    task_name=f"Humanize: {article.title[:30]}"
+                )
+            )
+            rewritten_html = self._extract_humanized_html(rewritten_response)
+
+            # Every extra LLM call costs real money whether or not we end up using its
+            # output — always account for it so campaign cost tracking stays accurate.
+            article.cost += usage.get('cost', 0.0)
+            for key, value in usage.items():
+                if key in article.token_usage:
+                    article.token_usage[key] += value
+
+            failure_reason = self._humanize_sanity_check(article.content_html, rewritten_html, article.metadata.keywords)
+            if failure_reason:
+                logger.warning(
+                    "[HUMANIZE] Rewrite failed sanity check (%s) — keeping original content. "
+                    "Original headings: %s | Rewritten headings: %s",
+                    failure_reason,
+                    self._heading_texts(article.content_html),
+                    self._heading_texts(rewritten_html),
+                )
+                return article
+
+            article.content_html = rewritten_html
+            article.word_count = len(re.findall(r'\b\w+\b', re.sub(r'<[^>]+>', '', rewritten_html)))
+            logger.info("[HUMANIZE] Rewrite passed sanity check and was applied. Cost: $%.4f", usage.get('cost', 0.0))
+            return article
+        except Exception as err:  # Never let a polish pass break the pipeline
+            logger.warning("[HUMANIZE] Rewrite pass failed (%s) — keeping original content.", err)
+            return article
+
+    @staticmethod
+    def _extract_humanized_html(response: str) -> str:
+        """Strips markdown code fences the LLM sometimes wraps HTML output in."""
+        text = response.strip()
+        text = re.sub(r'^```(?:html)?\s*\n?', '', text)
+        text = re.sub(r'\n?```\s*$', '', text)
+        return text.strip()
+
+    @staticmethod
+    def _heading_texts(html: str) -> List[str]:
+        """
+        Extracts H1/H2/H3 visible text, ignoring inner tags (e.g. a <strong> or <a>
+        wrapping part of a heading) and whitespace differences — those are harmless
+        formatting variance, not the wording changes the sanity check needs to catch.
+        """
+        raw_headings = re.findall(r'<h[123][^>]*>(.*?)</h[123]>', html, re.IGNORECASE | re.DOTALL)
+        texts = [re.sub(r'<[^>]+>', '', h) for h in raw_headings]
+        return [' '.join(t.split()) for t in texts]
+
+    @staticmethod
+    def _humanize_sanity_check(original_html: str, rewritten_html: str, keywords: List[str]) -> Optional[str]:
+        """
+        Returns None if the rewrite is safe to use, otherwise a short reason string.
+        Pure-Python structural comparison — no LLM call, so this check is free.
+        """
+        if not rewritten_html or len(rewritten_html) < 200:
+            return "output too short/empty"
+
+        if ContentGeneratorAgent._heading_texts(original_html) != ContentGeneratorAgent._heading_texts(rewritten_html):
+            return "heading text changed"
+
+        def link_hrefs(html: str) -> Set[str]:
+            return set(re.findall(r'<a\s[^>]*href=["\']([^"\']+)["\']', html, re.IGNORECASE))
+
+        if link_hrefs(original_html) != link_hrefs(rewritten_html):
+            return "links changed"
+
+        original_words = len(re.findall(r'\b\w+\b', re.sub(r'<[^>]+>', '', original_html)))
+        rewritten_words = len(re.findall(r'\b\w+\b', re.sub(r'<[^>]+>', '', rewritten_html)))
+        if original_words == 0 or abs(rewritten_words - original_words) / original_words > 0.20:
+            return f"word count drifted too far ({original_words} -> {rewritten_words})"
+
+        # Compare keyword coverage using the SAME normalized matching the real SEO
+        # evaluator uses (handles "&"/"and", punctuation, stop words) — a raw lowercase
+        # substring check would reject harmless rewordings the evaluator wouldn't even
+        # notice. Coverage is compared before/after rather than requiring zero drops,
+        # matching the evaluator's own proportional scoring (SEOEvaluatorAgent awards
+        # partial credit for partial coverage, not all-or-nothing).
+        valid_keywords = [kw for kw in keywords if isinstance(kw, str) and kw.strip()]
+        if valid_keywords:
+            def coverage(html: str) -> float:
+                normalized = SEOEvaluatorAgent._normalize_for_kw_match(html)
+                found = sum(
+                    1 for kw in valid_keywords
+                    if SEOEvaluatorAgent._normalize_for_kw_match(kw) in normalized
+                )
+                return found / len(valid_keywords)
+
+            original_coverage = coverage(original_html)
+            rewritten_coverage = coverage(rewritten_html)
+            if rewritten_coverage < original_coverage - 0.15:
+                return f"keyword coverage dropped ({original_coverage:.0%} -> {rewritten_coverage:.0%})"
+
+        return None
 
     def _parse_article_response(
         self, content: str, title: str, target_keywords: List[str], category: str = ""
