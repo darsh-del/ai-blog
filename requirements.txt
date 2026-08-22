@@ -42,7 +42,7 @@ tenacity>=8.2.0  # For retry logic
 protobuf>=4.21.0,<5.0.0  # Compatible with grpcio
 grpcio>=1.60.0,<2.0.0    # Compatible with protobuf 4.x
 grpcio-tools>=1.60.0,<2.0.0
-weaviate-client>=4.1.0
+weaviate-client>=4.23.0
 
 # Google Blogger API dependencies (optional - for Blogger publishing)
 google-api-python-client>=2.0.0
