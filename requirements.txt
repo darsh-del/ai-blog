@@ -30,7 +30,7 @@ sentence-transformers>=2.2.0
 faiss-cpu>=1.7.0
 
 # FastAPI dependencies (required for API functionality)
-fastapi>=0.104.1
+fastapi>=0.141.1
 uvicorn[standard]>=0.24.0
 python-multipart>=0.0.6
 
