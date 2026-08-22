@@ -405,11 +405,19 @@ class Config:
     # Must match the live site's real permalink structure so canonical URLs are accurate for SEO.
     BLOG_URL_PATH = os.getenv("BLOG_URL_PATH", "blogs").strip("/")
 
-    # Second LLM pass that rewrites the final, SEO-passing draft to reduce statistical
-    # AI-writing tells (token-level predictability that AI detectors key on). Runs once,
+    # Second LLM pass that rewrites the final, SEO-passing draft for more natural
+    # sentence-length variation and less stock phrasing — flat, uniform-length prose
+    # reads poorly to real visitors regardless of how Google evaluates it. Runs once,
     # only on the winning draft — costs one extra LLM call per article. Fails safe: a
     # rewrite that fails its structural sanity check is discarded, original is kept.
     ENABLE_HUMANIZE_PASS = os.getenv("ENABLE_HUMANIZE_PASS", "True").lower() == "true"
+
+    # E-E-A-T: visible author byline + AI-assistance disclosure line, injected under
+    # the <h1> of every article (see ContentGeneratorAgent._inject_byline_and_disclosure).
+    # Both default on — disclosing automation is Google's own stated guidance, and an
+    # honest byline (even a team credit, see AUTHOR_PERSONAS below) beats none.
+    ENABLE_AUTHOR_BYLINE = os.getenv("ENABLE_AUTHOR_BYLINE", "True").lower() == "true"
+    ENABLE_AI_DISCLOSURE = os.getenv("ENABLE_AI_DISCLOSURE", "True").lower() == "true"
 
     # Scraper Configuration
     SCRAPER_RAW_MODE = os.getenv("SCRAPER_RAW_MODE", "0") == "1"
@@ -681,6 +689,19 @@ class Config:
     # Wrap PLACES_DATA and PLACES_DETAILS_DATA with the premium wrapper classes
     PLACES_DATA = PremiumPlaces(_places_raw, _premium_cfg)
     PLACES_DETAILS_DATA = PremiumPlacesDetails(_places_details_raw, _premium_cfg)
+
+    # Author Personas (E-E-A-T bylines + Person schema) ------------------------------
+    # Real, named team members articles get credited to. MUST be real, verifiable
+    # people — Google's own guidance says generic "By Staff" attribution doesn't build
+    # E-E-A-T, and a fabricated name would be a trust violation, not a fix for one.
+    # Populate data/config/authors.json (or the AUTHOR_PERSONAS_JSON env var) with:
+    #   [{"name": "...", "job_title": "...", "url": ""}, ...]
+    # "url" is optional — leave blank until a real author bio page exists to link to.
+    # Empty by default: falls back to an honest "{BRAND_NAME} Travel Team" byline and
+    # an Organization-type JSON-LD author until this is filled in.
+    AUTHORS_PATH = os.path.join(CONFIG_DIR, "authors.json")
+    _authors_raw = _load_json_config.__func__(AUTHORS_PATH, {"personas": []})
+    AUTHOR_PERSONAS = _get_env_json.__func__("AUTHOR_PERSONAS_JSON", _authors_raw.get("personas", []))
 
     # Scraper Targets & Blacklist (Override with JSON strings in .env if needed)
     SCRAPER_TARGETS = _get_env_json.__func__("SCRAPER_TARGETS", _competitors_cfg.get("scraper_targets", {}))

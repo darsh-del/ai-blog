@@ -1,8 +1,8 @@
 {
   "_meta": {
     "domain": "placesinrishikesh.com",
-    "brand": "Bucketlistt",
-    "purpose": "Maps article categories to Bucketlistt service pages for CTA injection",
+    "brand": "bucketlistt",
+    "purpose": "Maps article categories to bucketlistt service pages for CTA injection",
     "last_updated": "2026-06-09"
   },
 
@@ -25,39 +25,39 @@
   "category_to_cta_mapping": {
     "River Rafting in Rishikesh": {
       "cta_url": "https://www.bucketlistt.com/rafting",
-      "cta_text": "Book river rafting in Rishikesh on Bucketlistt",
+      "cta_text": "Book river rafting in Rishikesh on bucketlistt",
       "secondary_cta_url": "https://wa.me/918511838237",
-      "secondary_cta_text": "Chat with Bucketlistt for rafting packages"
+      "secondary_cta_text": "Chat with bucketlistt for rafting packages"
     },
     "Things to Do in Rishikesh": {
       "cta_url": "https://www.bucketlistt.com/",
-      "cta_text": "Browse all Rishikesh adventures on Bucketlistt",
+      "cta_text": "Browse all Rishikesh adventures on bucketlistt",
       "secondary_cta_url": "https://wa.me/918511838237",
-      "secondary_cta_text": "Plan your Rishikesh trip with Bucketlistt"
+      "secondary_cta_text": "Plan your Rishikesh trip with bucketlistt"
     },
     "Things To Do in Rishikesh": {
       "cta_url": "https://www.bucketlistt.com/",
-      "cta_text": "Browse all Rishikesh adventures on Bucketlistt",
+      "cta_text": "Browse all Rishikesh adventures on bucketlistt",
       "secondary_cta_url": "https://wa.me/918511838237",
-      "secondary_cta_text": "Plan your Rishikesh trip with Bucketlistt"
+      "secondary_cta_text": "Plan your Rishikesh trip with bucketlistt"
     },
     "Ganga Aarti in Rishikesh": {
       "cta_url": "https://www.bucketlistt.com/",
-      "cta_text": "Explore spiritual tours and activities in Rishikesh on Bucketlistt",
+      "cta_text": "Explore spiritual tours and activities in Rishikesh on bucketlistt",
       "secondary_cta_url": "https://wa.me/918511838237",
-      "secondary_cta_text": "WhatsApp Bucketlistt for customized tour plans"
+      "secondary_cta_text": "WhatsApp bucketlistt for customized tour plans"
     },
     "Best Hotels and Hostels in Rishikesh": {
       "cta_url": "https://www.bucketlistt.com/",
-      "cta_text": "Plan your adventure stay in Rishikesh with Bucketlistt",
+      "cta_text": "Plan your adventure stay in Rishikesh with bucketlistt",
       "secondary_cta_url": "https://wa.me/918511838237",
       "secondary_cta_text": "Get stay & adventure combo recommendations on WhatsApp"
     },
     "How to Reach Rishikesh": {
       "cta_url": "https://www.bucketlistt.com/",
-      "cta_text": "Plan your travel and activities in Rishikesh with Bucketlistt",
+      "cta_text": "Plan your travel and activities in Rishikesh with bucketlistt",
       "secondary_cta_url": "https://wa.me/918511838237",
-      "secondary_cta_text": "WhatsApp Bucketlistt for itinerary and transfer bookings"
+      "secondary_cta_text": "WhatsApp bucketlistt for itinerary and transfer bookings"
     }
   }
 }

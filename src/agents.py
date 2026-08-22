@@ -802,6 +802,16 @@ class ContentGeneratorAgent:
         city = Config.TARGET_CITY or "Rishikesh"
         year = datetime.now().strftime("%Y")
 
+        # Categories are stored canonically as "X in <City>" (data/config/categories.json
+        # keys CTA lookups on that exact string — don't change the data). Every template
+        # below also appends "{city}" itself, so without stripping it here, formatting
+        # produced "Best River Rafting in Rishikesh in Rishikesh — Complete 2026 Guide".
+        # Strip the trailing city name once, up front, so every template composes
+        # correctly no matter where it places {cat} relative to {city}.
+        de_duped_cat = re.sub(rf'\s+in\s+{re.escape(city)}\s*$', '', cat, flags=re.IGNORECASE).strip()
+        if de_duped_cat:
+            cat = de_duped_cat
+
         # 20 structurally distinct templates — enough variety that even at 10 000+
         # articles no template group dominates the title space.
         templates = [
@@ -1057,9 +1067,10 @@ class ContentGeneratorAgent:
 
     def humanize_article(self, article: ArticleDraft) -> ArticleDraft:
         """
-        Second LLM pass over an already SEO-passing article: rewrites prose to reduce
-        the statistical AI-writing signature (uniform sentence length, predictable
-        phrasing) that AI detectors key on. Runs once, only on the final winning draft.
+        Second LLM pass over an already SEO-passing article: rewrites prose for more
+        natural sentence-length variation and less predictable, stock phrasing — the
+        kind of flat uniformity that reads poorly to a real visitor regardless of how
+        any detector scores it. Runs once, only on the final winning draft.
 
         Fails safe by design: the rewrite is checked against the original for
         preserved headings/links/keywords/word-count before being accepted. Any
@@ -1254,6 +1265,29 @@ class ContentGeneratorAgent:
             final_title = actual_h1 if actual_h1 else title
             final_title = final_title.strip().replace('\n', ' ')
 
+            # DEDUP GUARD: `title` already passed TitleManager's duplicate/near-duplicate
+            # check before generation, but the LLM's own <h1> (final_title) never does.
+            # For obvious, well-covered topics the LLM repeatedly converges on the same
+            # "ideal" heading regardless of the deduplicated seed title it was given —
+            # that's how the same H1 (and therefore the same article_id, since it's an
+            # md5 of the title) has slipped out on separate runs. If the H1 diverged from
+            # the checked title and collides with one we've already used, keep the
+            # already-vetted title instead and rewrite the on-page heading to match.
+            if actual_h1 and final_title.lower().strip() != title.lower().strip():
+                if self.title_manager.is_title_used(final_title, self.slug_registry):
+                    logger.warning(
+                        "[DEDUP] Generated H1 '%s' collides with an existing title; "
+                        "keeping deduplicated title '%s' instead.", final_title, title
+                    )
+                    html_content = html_content.replace(
+                        f"<h1>{actual_h1}</h1>", f"<h1>{title}</h1>", 1
+                    )
+                    final_title = title
+                else:
+                    # Divergent but original — register it so other workers/threads in
+                    # this same run won't independently pick the same heading later.
+                    self.title_manager.save_used_title(final_title)
+
             faq_match = re.search(r'(?i)(?:FAQ_SECTION:|<h2>\s*Frequently Asked Questions.*?</h2>|<div[^>]*class=["\']faq-section["\'][^>]*>)', content)
             if faq_match:
                 start_pos = faq_match.start()
@@ -1272,9 +1306,14 @@ class ContentGeneratorAgent:
             html_content_cleaned = self._strip_json_ld(html_content)
             faq_section_cleaned = self._strip_json_ld(faq_section)
 
+            # E-E-A-T: real byline + disclosure (or an honest team credit if no persona
+            # is configured yet), kept in sync with the JSON-LD author right below.
+            author_persona = self._pick_author_persona()
+            html_content_cleaned = self._inject_byline_and_disclosure(html_content_cleaned, author_persona)
+
             canonical_url = self._build_canonical_url(url_slug)
             json_ld = self._extract_json_ld(content) or self._generate_default_schema(
-                final_title, meta_description, canonical_url
+                final_title, meta_description, canonical_url, author=author_persona
             )
 
             text_content = self._extract_text_from_html(html_content_cleaned)
@@ -1383,16 +1422,36 @@ class ContentGeneratorAgent:
                 logger.warning("Failed to parse JSON-LD schema.")
         return None
 
-    def _generate_default_schema(self, title: str, description: str, canonical_url: str = Config.DEFAULT_LINK_URL) -> Dict:
+    def _generate_default_schema(
+        self, title: str, description: str, canonical_url: str = Config.DEFAULT_LINK_URL,
+        author: Optional[Dict] = None
+    ) -> Dict:
+        """Builds the article's JSON-LD. `author` is a persona dict from
+        Config.AUTHOR_PERSONAS (name/job_title/url) — when provided, this emits a real
+        Person author instead of the Organization; when not, it falls back to the brand.
+        Must stay in sync with the visible byline text (see
+        _inject_byline_and_disclosure) — Google cross-checks structured data against
+        what's actually on the page.
+        """
+        if author and author.get("name"):
+            author_schema: Dict = {
+                "@type": "Person",
+                "name": author["name"],
+                "worksFor": {"@type": "Organization", "name": Config.BRAND_NAME}
+            }
+            if author.get("job_title"):
+                author_schema["jobTitle"] = author["job_title"]
+            if author.get("url"):
+                author_schema["url"] = author["url"]
+        else:
+            author_schema = {"@type": "Organization", "name": Config.BRAND_NAME}
+
         return {
             "@context": "https://schema.org",
             "@type": "BlogPosting",
             "headline": title,
             "description": description,
-            "author": {
-                "@type": "Organization",
-                "name": Config.BRAND_NAME
-            },
+            "author": author_schema,
             "publisher": {
                 "@type": "Organization",
                 "name": Config.BRAND_NAME,
@@ -1408,6 +1467,56 @@ class ContentGeneratorAgent:
                 "@id": canonical_url
             }
         }
+
+    def _pick_author_persona(self) -> Optional[Dict]:
+        """Random real author for this article's byline/schema, or None if
+        Config.AUTHOR_PERSONAS hasn't been filled in yet (see data/config/authors.json)."""
+        if not Config.AUTHOR_PERSONAS:
+            return None
+        return random.choice(Config.AUTHOR_PERSONAS)
+
+    def _inject_byline_and_disclosure(self, html_content: str, author: Optional[Dict]) -> str:
+        """Adds a visible byline + AI-disclosure line right under the <h1>.
+
+        This has to exist for two reasons: (1) it's the honest thing to do, and (2)
+        the JSON-LD author field this pairs with (_generate_default_schema) is only
+        valid structured data if it matches something actually visible on the page —
+        an author claim that only exists in the schema and nowhere on the page is what
+        Google's structured-data guidelines explicitly disallow.
+        """
+        if not (Config.ENABLE_AUTHOR_BYLINE or Config.ENABLE_AI_DISCLOSURE):
+            return html_content
+
+        parts = []
+        if Config.ENABLE_AUTHOR_BYLINE:
+            if author and author.get("name"):
+                byline = f"By {author['name']}"
+                byline += f", {author['job_title']} at {Config.BRAND_NAME}" if author.get("job_title") \
+                    else f" for {Config.BRAND_NAME}"
+            else:
+                byline = f"By the {Config.BRAND_NAME} Travel Team"
+            parts.append(byline)
+        if Config.ENABLE_AI_DISCLOSURE:
+            parts.append("Drafted with AI research assistance and reviewed for accuracy by our travel team")
+
+        if not parts:
+            return html_content
+        meta_html = f'<p class="post-meta byline"><em>{". ".join(parts)}.</em></p>'
+
+        h1_match = re.search(r'</h1>', html_content, re.IGNORECASE)
+        if not h1_match:
+            return meta_html + html_content
+
+        insert_at = h1_match.end()
+        # If the LLM already added an "Updated: ..." post-meta paragraph right after
+        # the H1, insert after that instead, so both meta lines sit together.
+        updated_match = re.match(
+            r'\s*<p[^>]*class=["\'][^"\']*post-meta[^"\']*["\'][^>]*>.*?</p>',
+            html_content[insert_at:], re.IGNORECASE | re.DOTALL
+        )
+        if updated_match:
+            insert_at += updated_match.end()
+        return html_content[:insert_at] + meta_html + html_content[insert_at:]
 
     def _generate_default_faq(self, title: str) -> str:
         template = Config.TEMPLATES.get("faq_item", "")
@@ -1624,6 +1733,8 @@ class ContentGeneratorAgent:
             primary_keyword, keyword_phrase, brand_context, location_text
         )
         html_content = self._build_fallback_html(title, primary_keyword, paragraph_templates)
+        author_persona = self._pick_author_persona()
+        html_content = self._inject_byline_and_disclosure(html_content, author_persona)
         word_count = len(re.findall(r'\b\w+\b', self._extract_text_from_html(html_content)))
         meta_title, meta_description, faq_section = self._build_fallback_meta(
             title, primary_keyword
@@ -1636,7 +1747,9 @@ class ContentGeneratorAgent:
             url_slug=slug,
             canonical_url=canonical_url,
             keywords=keywords,
-            json_ld_schema=self._generate_default_schema(title, meta_description, canonical_url)
+            json_ld_schema=self._generate_default_schema(
+                title, meta_description, canonical_url, author=author_persona
+            )
         )
         return ArticleDraft(
             title=title,
@@ -1870,23 +1983,28 @@ class SEOEvaluatorAgent:
         elif city_count > 0:
             score += 6
 
-        # Check for varied SEO boosters
+        # Reward natural location phrasing. Widened on purpose: a short, fixed list
+        # here is what forces every article to reuse the exact same handful of canned
+        # phrases (textbook keyword stuffing). A wider pool of genuinely natural
+        # variants lets different articles land on different phrasing while still
+        # scoring the same — same max points as before, just less repetitive across
+        # the site.
         seo_boosters = [
-            f"in {city_lower}",
-            f"across {city_lower}",
-            f"customers in {city_lower}",
-            f"projects in {city_lower}",
-            f"best quality in {city_lower}",
-            f"top-rated in {city_lower}",
-            f"services in {city_lower}",
-            f"experts in {city_lower}"
+            f"in {city_lower}", f"across {city_lower}", f"around {city_lower}",
+            f"near {city_lower}", f"visit to {city_lower}", f"trip to {city_lower}",
+            f"explore {city_lower}", f"exploring {city_lower}", f"based in {city_lower}",
+            f"customers in {city_lower}", f"projects in {city_lower}",
+            f"best quality in {city_lower}", f"top-rated in {city_lower}",
+            f"services in {city_lower}", f"experts in {city_lower}",
+            f"{city_lower}'s", f"heading to {city_lower}", f"travelling to {city_lower}",
+            f"traveling to {city_lower}", f"a stay in {city_lower}"
         ]
 
         found_boosters = sum(1 for booster in seo_boosters if booster in content_lower)
         score += min(8, found_boosters * 2)
 
         # For GENERIC articles, only penalize if brand appears in H1/H2 headings
-        # (not in body — conclusion CTAs will always contain Bucketlistt by design)
+        # (not in body — conclusion CTAs will always contain bucketlistt by design)
         if article_type == "generic":
             brand_lower = Config.BRAND_NAME.lower()
             # Extract headings only to check for over-promotion

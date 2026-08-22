@@ -73,8 +73,7 @@ def _get_media_injection_block(media_assets: Optional[List[Dict]]) -> str:
     RULES:
     - NEVER place ANY of these links in the first 3 paragraphs or the intro
     - Place AFTER the 4th paragraph minimum (mid-body or conclusion sections)
-    - Format as contextual anchor text: e.g. <p>Watch this <a href="URL"
-      target="_blank" rel="noopener">real customer jump experience</a> to see what to expect.</p>
+    - Format as contextual anchor text: e.g. <p>Watch this <a href="URL">real customer jump experience</a> to see what to expect.</p>
     - Max 1 YouTube embed. Max 3 Instagram embeds.
     - Only include if the link is contextually relevant at that point in the article
 
@@ -115,7 +114,7 @@ def _get_conclusion_cta_block(is_brand_article: bool, bucketlistt_cta_url: str) 
        (a route name, an operator, a price, a timing) — never the target keywords.
     2. A single, natural booking suggestion (do NOT use pushy sales language):
        Example: "Ready to experience this for yourself? Browse and compare options on
-       <a href="{bucketlistt_cta_url}" target="_blank" rel="noopener">Bucketlistt</a>."
+       <a href="{bucketlistt_cta_url}">bucketlistt</a>."
     3. Tone: Helpful and informative, NOT promotional. Write as a knowledgeable local guide.
 {_forbidden}
     """
@@ -131,7 +130,7 @@ def _get_conclusion_cta_block(is_brand_article: bool, bucketlistt_cta_url: str) 
     2. Encourage the reader to plan their visit to Rishikesh.
     3. Optionally (not mandatory) include ONE natural contextual link:
        Example: "For a curated list of verified operators and packages, you can explore options on
-       <a href="{bucketlistt_cta_url}" target="_blank" rel="noopener">Bucketlistt</a>."
+       <a href="{bucketlistt_cta_url}">bucketlistt</a>."
     4. Tone: Authoritative travel guide. NOT salesy or promotional.
 {_forbidden}
     """
@@ -207,7 +206,7 @@ def _get_partner_brand_block(category: str, bucketlistt_cta_url: str) -> str:
     RULES FOR PARTNER BRAND MENTIONS:
     - Mention partner brands by name in body paragraphs AFTER paragraph 4
     - Mention price, height, and brief feature description (neutral, factual tone)
-    - Always conclude with: "Compare and book via Bucketlistt" — linking to {bucketlistt_cta_url}
+    - Always conclude with: "Compare and book via bucketlistt" — linking to {bucketlistt_cta_url}
     - In comparison articles, mention ALL relevant partners for full editorial coverage
 
     STRICTLY FORBIDDEN:
@@ -224,7 +223,32 @@ def _get_partner_brand_block(category: str, bucketlistt_cta_url: str) -> str:
     For the highest bungee in India, Maa Ganga Bungy at Devprayag offers a 200+ metre
     jump — though it requires a separate trip from Rishikesh. Compare all
     available options and book online through
-    <a href="{bucketlistt_cta_url}" target="_blank" rel="noopener">Bucketlistt</a>."
+    <a href="{bucketlistt_cta_url}">bucketlistt</a>."
+    """
+
+
+def _get_authoritative_citation_block() -> str:
+    """
+    Optional (non-scored, non-mandatory) prompt to add ONE outbound link to a real,
+    independent, authoritative source. This is a genuine E-E-A-T/trust signal that
+    nothing else in the pipeline provides — every other outbound link this generator
+    ever adds points back to bucketlistt or an approved partner. Kept to a short,
+    hand-verified allowlist rather than letting the model invent a URL, so nothing
+    can end up broken or unrelated.
+    """
+    return """
+    ╔══════════════════════════════════════════════════════════════════╗
+    ║   OPTIONAL EXTERNAL CITATION (NOT MANDATORY)                     ║
+    ╚══════════════════════════════════════════════════════════════════╝
+
+    If, and only if, it fits naturally (e.g. mentioning weather, best season, or
+    official permits/safety rules), you MAY cite ONE of these real government
+    sources by name with a link. Do not force it in if it doesn't fit:
+    - Uttarakhand Tourism Development Board — https://uttarakhandtourism.gov.in
+    - India Meteorological Department (Dehradun centre, for Rishikesh weather) —
+      https://mausam.imd.gov.in/dehradun/
+    Do NOT invent or guess any other external URL. If neither source is relevant
+    to this specific article, skip this section entirely.
     """
 
 
@@ -564,7 +588,7 @@ def create_content_prompt(
     | **Title SEO** | Title MUST include at least one Primary Keyword. |
     | **Brand Neutrality** | {'If this is an objective/generic guide, DO NOT include brand in headings.' if not is_brand_article else 'Natural integration allowed.'} |
     | **Location Density** | **STRICT MENTION COUNT:** You MUST mention '{Config.TARGET_CITY}' exactly between 4 and 8 times TOTAL. |
-    | **Location Booster** | **STRICT BOOSTER MENTIONS (MANDATORY):** You MUST include at least 4 location booster phrases exactly once. |
+    | **Location Booster** | Mention '{Config.TARGET_CITY}' with at least 4 *differently worded* phrasings (e.g. "in {Config.TARGET_CITY}", "a trip to {Config.TARGET_CITY}", "exploring {Config.TARGET_CITY}") — never the same phrase twice. |
     | **Structure** | 1 H1, at least 4 H2s, at least 2 H3s under EVERY H2. |
     | **Meta Data** | Meta Title: 50-65 chars. Meta Desc: 120-155 chars (no quotes). |
     | **LANGUAGE** | **MUST be in English ONLY.** |
@@ -591,6 +615,8 @@ def create_content_prompt(
     {LINK_PLACEMENT_BLOCK}
 
     {_get_partner_brand_block(category, bucketlistt_cta_url)}
+
+    {_get_authoritative_citation_block()}
 
     {_get_media_injection_block(media_assets)}
 
@@ -620,8 +646,8 @@ def create_content_prompt(
 def create_humanize_prompt(content_html: str, target_keywords: List[str]) -> str:
     """
     Creates a prompt for a second pass that rewrites already-finished, SEO-passing
-    article HTML to reduce statistical AI-writing tells (uniform sentence length,
-    predictable phrasing) without touching anything downstream systems depend on:
+    article HTML for more natural sentence-length variation and less predictable,
+    stock phrasing, without touching anything downstream systems depend on:
     heading text, hyperlinks, or keyword presence. The rewrite is verified against
     the original by a structural check after this call — this prompt's job is just
     to make that check likely to pass while genuinely varying the prose.

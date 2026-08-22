@@ -1,5 +1,5 @@
 {
-  "_comment": "Bucketlistt.com sitemap mapping — drives automatic contextual backlinks & CTA widget injection with 100% verified live URLs",
+  "_comment": "bucketlistt.com sitemap mapping — drives automatic contextual backlinks & CTA widget injection with 100% verified live URLs",
 
   "activities": {
     "rafting": {
@@ -29,7 +29,7 @@
         "117m bungee",
         "himalayan bungee"
       ],
-      "url": "https://www.bucketlistt.com/rishikesh/bungee-jumping",
+      "url": "https://www.bucketlistt.com/bungee",
       "category_url": "https://www.bucketlistt.com/bungee",
       "cta_title": "🪂 India's Highest Bungee Jump",
       "cta_text": "Plunge from an 83-metre cantilever platform over the Himalayas. Certified by a team of expert jumpmasters. Book your jump today — slots fill up fast!",
@@ -174,7 +174,7 @@
         "how to reach rishikesh"
       ],
       "url": "https://www.bucketlistt.com/rishikesh",
-      "anchor_text": "explore all Rishikesh adventures on Bucketlistt"
+      "anchor_text": "explore all Rishikesh adventures on bucketlistt"
     }
   },
 
@@ -260,7 +260,7 @@
       "keywords": ["bungee price list", "bungee jump rates"]
     },
     {
-      "title": "Top Reasons to Book River Rafting with Bucketlistt",
+      "title": "Top Reasons to Book River Rafting with bucketlistt",
       "url": "https://www.bucketlistt.com/blogs/top-reasons-to-book-river-rafting-with-bucketlistt",
       "keywords": ["why book rafting bucketlistt", "bucketlistt rafting"]
     },
@@ -299,7 +299,7 @@
   "general_cta": {
     "url": "https://www.bucketlistt.com/rishikesh",
     "title": "🏔️ Plan Your Rishikesh Adventure",
-    "text": "Discover and book the best adventure activities, cultural experiences, and stays in Rishikesh — all verified, certified, and available with instant confirmation on Bucketlistt!",
+    "text": "Discover and book the best adventure activities, cultural experiences, and stays in Rishikesh — all verified, certified, and available with instant confirmation on bucketlistt!",
     "button_text": "Explore All Rishikesh Activities",
     "button_color": "#ff5a5f"
   }

@@ -171,17 +171,17 @@
           "url": "https://www.instagram.com/p/DWQryldjwP-/",
           "platform": "instagram_reel",
           "topic_tags": ["rafting experience", "family rafting", "senior rafting", "real customers"],
-          "suggested_anchor_text": "Watch: A 71-year-old rafter's experience with Bucketlistt",
+          "suggested_anchor_text": "Watch: A 71-year-old rafter's experience with bucketlistt",
           "suggested_context": "Use in articles about family rafting, age limits, or 'is rafting safe' queries"
         },
         {
           "id": "rafting_005",
-          "title": "People Enjoying River Rafting — Bucketlistt Customers",
+          "title": "People Enjoying River Rafting — bucketlistt Customers",
           "url": "https://www.instagram.com/p/DWBmtPGE6Xb/",
           "platform": "instagram_reel",
           "topic_tags": ["rafting experience", "customer reviews", "rafting fun"],
-          "suggested_anchor_text": "See real customers enjoying river rafting with Bucketlistt",
-          "suggested_context": "Use near social proof sections or 'why book with Bucketlistt' paragraphs"
+          "suggested_anchor_text": "See real customers enjoying river rafting with bucketlistt",
+          "suggested_context": "Use near social proof sections or 'why book with bucketlistt' paragraphs"
         },
         {
           "id": "rafting_006",
@@ -244,52 +244,52 @@
       "assets": [
         {
           "id": "spiritual_001",
-          "title": "Ganga Aarti First Row Tickets — Book Through Bucketlistt",
+          "title": "Ganga Aarti First Row Tickets — Book Through bucketlistt",
           "url": "https://www.instagram.com/p/DXTmlnJEtxI/",
           "platform": "instagram_reel",
           "topic_tags": ["ganga aarti", "triveni ghat", "rishikesh aarti", "first row tickets"],
-          "suggested_anchor_text": "Watch the Ganga Aarti experience — first row seats available on Bucketlistt",
+          "suggested_anchor_text": "Watch the Ganga Aarti experience — first row seats available on bucketlistt",
           "suggested_context": "Use in articles about Ganga Aarti, spiritual Rishikesh, or 'things to do in Rishikesh' articles"
         }
       ]
     },
 
     "brand_social_proof": {
-      "_description": "Influencer and review content — use in any article where social proof or 'why book with Bucketlistt' sections appear. Safe to inject across categories as supporting evidence.",
+      "_description": "Influencer and review content — use in any article where social proof or 'why book with bucketlistt' sections appear. Safe to inject across categories as supporting evidence.",
       "_inject_when_article_contains": ["bucketlistt", "book now", "why choose", "verified", "trusted operator", "adventure booking"],
       "assets": [
         {
           "id": "social_proof_001",
-          "title": "What Influencers Say About Bucketlistt — Review Reel 1",
+          "title": "What Influencers Say About bucketlistt — Review Reel 1",
           "url": "https://www.instagram.com/p/DU7LBSUEg3e/",
           "platform": "instagram_reel",
           "topic_tags": ["influencer review", "bucketlistt review", "social proof"],
-          "suggested_anchor_text": "See what travel influencers say about Bucketlistt on Instagram",
-          "suggested_context": "Use in conclusion sections or 'why book with Bucketlistt' paragraphs only"
+          "suggested_anchor_text": "See what travel influencers say about bucketlistt on Instagram",
+          "suggested_context": "Use in conclusion sections or 'why book with bucketlistt' paragraphs only"
         },
         {
           "id": "social_proof_002",
-          "title": "What Influencers Say About Bucketlistt — Review Reel 2",
+          "title": "What Influencers Say About bucketlistt — Review Reel 2",
           "url": "https://www.instagram.com/p/DVRPFj2EvtY/",
           "platform": "instagram_reel",
           "topic_tags": ["influencer review", "bucketlistt review", "social proof"],
-          "suggested_anchor_text": "More influencer reviews of Bucketlistt adventures",
+          "suggested_anchor_text": "More influencer reviews of bucketlistt adventures",
           "suggested_context": "Secondary social proof embed — use in conclusion or CTA section only"
         }
       ]
     },
 
     "brand_general": {
-      "_description": "About Bucketlistt brand content — use in any article type but ONLY in the conclusion / about-the-operator paragraph, never in the intro.",
+      "_description": "About bucketlistt brand content — use in any article type but ONLY in the conclusion / about-the-operator paragraph, never in the intro.",
       "_inject_when_article_contains": ["adventure sports india", "book adventure", "bucketlistt", "safe adventure", "adventure platform"],
       "assets": [
         {
           "id": "brand_001",
-          "title": "About Bucketlistt — How We're Making Adventure Sports Safer in India",
+          "title": "About bucketlistt — How We're Making Adventure Sports Safer in India",
           "url": "https://www.instagram.com/p/DR6xPioDC7Y/",
           "platform": "instagram_reel",
           "topic_tags": ["about bucketlistt", "adventure safety india", "bucketlistt mission"],
-          "suggested_anchor_text": "How Bucketlistt is making adventure sports safer across India",
+          "suggested_anchor_text": "How bucketlistt is making adventure sports safer across India",
           "suggested_context": "Use in conclusion section or brand trust paragraphs — never in intro"
         }
       ]

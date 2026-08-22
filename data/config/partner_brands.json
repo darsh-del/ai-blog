@@ -1,7 +1,7 @@
 {
   "_meta": {
     "purpose": "Partner brand configuration — these are brands that can be mentioned contextually (NOT as paid promotions) in comparison, 'best of', and activity guide articles on placesinrishikesh.com. Mentioning multiple verified operators by name is a Google E-E-A-T positive signal.",
-    "usage_rule": "Partner brands may be named in body paragraphs AFTER paragraph 4. Never in the introduction. Never presented as exclusive sponsors. Always presented as 'one of the options available' alongside Bucketlistt.",
+    "usage_rule": "Partner brands may be named in body paragraphs AFTER paragraph 4. Never in the introduction. Never presented as exclusive sponsors. Always presented as 'one of the options available' alongside bucketlistt.",
     "last_updated": "2026-05-04"
   },
 
@@ -27,7 +27,7 @@
         "Bungee jumping price comparison articles"
       ],
       "media_asset_ids": ["bungee_002", "bungee_003", "bungee_004", "bungee_005", "bungee_007", "bungee_013"],
-      "suggested_mention_pattern": "Himalayan Bungy offers one of Rishikesh's most iconic jumps at 117 metres — you can compare all operators and book through <a href=\"https://www.bucketlistt.com/bungee\" target=\"_blank\" rel=\"noopener\">Bucketlistt</a>.",
+      "suggested_mention_pattern": "Himalayan Bungy offers one of Rishikesh's most iconic jumps at 117 metres — you can compare all operators and book through <a href=\"https://www.bucketlistt.com/bungee\" target=\"_blank\" rel=\"noopener\">bucketlistt</a>.",
       "do_not_mention_in": ["Rafting articles", "Paragliding articles", "Camping articles"]
     },
 
@@ -50,7 +50,7 @@
         "Articles about unique bungee experiences (water-touch)"
       ],
       "media_asset_ids": ["bungee_008", "bungee_011", "bungee_012"],
-      "suggested_mention_pattern": "For a unique experience, Splash Bungy at 109 metres lets you touch the Ganga river mid-jump — compare their packages with other operators on <a href=\"https://www.bucketlistt.com/bungee\" target=\"_blank\" rel=\"noopener\">Bucketlistt</a>.",
+      "suggested_mention_pattern": "For a unique experience, Splash Bungy at 109 metres lets you touch the Ganga river mid-jump — compare their packages with other operators on <a href=\"https://www.bucketlistt.com/bungee\" target=\"_blank\" rel=\"noopener\">bucketlistt</a>.",
       "do_not_mention_in": ["Rafting articles", "Paragliding articles", "Camping articles"]
     },
 
@@ -73,7 +73,7 @@
         "Paragliding price comparison articles"
       ],
       "media_asset_ids": ["paragliding_001", "paragliding_002", "paragliding_003", "paragliding_004"],
-      "suggested_mention_pattern": "WhyNotFly is one of Rishikesh's well-regarded paragliding operators, particularly suited for first-time flyers. Compare all paragliding options and book via <a href=\"https://www.bucketlistt.com/paragliding\" target=\"_blank\" rel=\"noopener\">Bucketlistt</a>.",
+      "suggested_mention_pattern": "WhyNotFly is one of Rishikesh's well-regarded paragliding operators, particularly suited for first-time flyers. Compare all paragliding options and book via <a href=\"https://www.bucketlistt.com/paragliding\" target=\"_blank\" rel=\"noopener\">bucketlistt</a>.",
       "do_not_mention_in": ["Bungee articles", "Rafting articles", "Camping articles"]
     },
 
@@ -96,7 +96,7 @@
         "Devprayag adventure articles"
       ],
       "media_asset_ids": ["bungee_009", "bungee_010"],
-      "suggested_mention_pattern": "For the ultimate jump, Maa Ganga Bungy in nearby Devprayag offers India's highest bungee at 200+ metres above the Ganga — though it requires a separate trip from Rishikesh. Book Rishikesh bungee options via <a href=\"https://www.bucketlistt.com/bungee\" target=\"_blank\" rel=\"noopener\">Bucketlistt</a>.",
+      "suggested_mention_pattern": "For the ultimate jump, Maa Ganga Bungy in nearby Devprayag offers India's highest bungee at 200+ metres above the Ganga — though it requires a separate trip from Rishikesh. Book Rishikesh bungee options via <a href=\"https://www.bucketlistt.com/bungee\" target=\"_blank\" rel=\"noopener\">bucketlistt</a>.",
       "do_not_mention_in": ["Rafting articles", "Paragliding articles", "Camping articles"]
     }
 
@@ -107,12 +107,12 @@
     "required_structure_for_comparison": [
       "Mention each operator: name, height/product, price range",
       "Neutral tone — do not say any operator is 'better'",
-      "Conclude with: 'Compare and book all operators on Bucketlistt'",
-      "CTA must go to Bucketlistt, not directly to operator websites"
+      "Conclude with: 'Compare and book all operators on bucketlistt'",
+      "CTA must go to bucketlistt, not directly to operator websites"
     ],
     "forbidden": [
       "Do NOT link directly to competitor operator booking pages",
-      "Do NOT say 'Bucketlistt is cheaper than Himalayan Bungy'",
+      "Do NOT say 'bucketlistt is cheaper than Himalayan Bungy'",
       "Do NOT fabricate prices or heights"
     ]
   }

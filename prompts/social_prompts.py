@@ -85,7 +85,7 @@ Generate a highly engaging, professional, long-form LinkedIn article (post comme
    - **DO NOT include any outbound URLs, main article links, or raw links in the generated post body.**
      All outbound links will be added programmatically by the publisher. Keep the commentary text 100% clean.
 7. **Hashtags and CTA**:
-   - Append 4-5 relevant hashtags at the bottom (e.g., #Rishikesh, #AdventureTravel, #Bucketlistt).
+   - Append 4-5 relevant hashtags at the bottom (e.g., #Rishikesh, #AdventureTravel, #bucketlistt).
 
 Return ONLY the ready-to-paste LinkedIn article text. Do not add any introductory/outro remarks or markdown.
 """

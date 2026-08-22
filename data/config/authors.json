@@ -1,0 +1,10 @@
+{
+  "_readme": "Real, named bucketlistt team members that generated articles are credited to (byline + JSON-LD Person schema). Do NOT put a fictional/invented name here — Google's E-E-A-T guidance requires a real, verifiable person, and a made-up author is a trust violation, not a fix. The generator rotates between these entries. 'job_title' is left blank until confirmed — a wrong title is worse than no title; fill in the real one when known. 'url' is optional: leave it \"\" until a real author bio page exists on the site (see documentation/WEBSITE_SEO_CHANGES.md, item #5), then point it there.",
+  "personas": [
+    {"name": "Darsh Shah", "job_title": "", "url": ""},
+    {"name": "Divyam Shah", "job_title": "", "url": ""},
+    {"name": "Prachi Kalal", "job_title": "", "url": ""},
+    {"name": "Shubham Makheja", "job_title": "", "url": ""},
+    {"name": "Sachin", "job_title": "", "url": ""}
+  ]
+}

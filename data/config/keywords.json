@@ -1,7 +1,7 @@
 {
   "_meta": {
     "domain": "placesinrishikesh.com",
-    "brand": "Bucketlistt",
+    "brand": "bucketlistt",
     "target_city": "Rishikesh",
     "strategy": "75% generic / 25% brand — protect domain authority, maximize discovery traffic",
     "last_updated": "2026-05-03",
@@ -49,7 +49,7 @@
     "rishikesh tourism"
   ],
   "bungee_jumping": {
-    "_notes": "Highest-intent cluster. Bungee is Bucketlistt's primary service. Mix of informational + transactional.",
+    "_notes": "Highest-intent cluster. Bungee is bucketlistt's primary service. Mix of informational + transactional.",
     "head_terms": [
       "bungee jumping in rishikesh",
       "bungee jumping rishikesh",
@@ -258,7 +258,7 @@
     ]
   },
   "flying_fox_zipline": {
-    "_notes": "Flying Fox is Bucketlistt's specific deep-link product. Zipline over Ganga is a unique selling point.",
+    "_notes": "Flying Fox is bucketlistt's specific deep-link product. Zipline over Ganga is a unique selling point.",
     "head_terms": [
       "flying fox rishikesh",
       "zipline in rishikesh",
@@ -389,7 +389,7 @@
     ]
   },
   "multi_activity_combos": {
-    "_notes": "Combos capture high-intent visitors planning full-day trips. Unique to Bucketlistt's catalog.",
+    "_notes": "Combos capture high-intent visitors planning full-day trips. Unique to bucketlistt's catalog.",
     "keywords": [
       "adventure combo rishikesh",
       "bungee and rafting combo rishikesh",
@@ -1051,7 +1051,7 @@
   },
 
   "hotels_rishikesh": {
-    "_notes": "Hotel content builds domain authority and captures high-intent accommodation searches. Cross-link to adventure articles naturally. Bucketlistt CTA: 'Book your adventure activities along with your stay'.",
+    "_notes": "Hotel content builds domain authority and captures high-intent accommodation searches. Cross-link to adventure articles naturally. bucketlistt CTA: 'Book your adventure activities along with your stay'.",
     "head_terms": [
       "best hotels in rishikesh",
       "hotels in rishikesh",
@@ -1206,7 +1206,7 @@
   },
 
   "partner_brands_keywords": {
-    "_notes": "Keywords specifically targeting partner brand searches. These allow articles to rank for branded + semi-branded queries while routing bookings through Bucketlistt. Partner brands: Himalayan Bungy, Splash Bungy, WhyNotFly, Maa Ganga Bungy.",
+    "_notes": "Keywords specifically targeting partner brand searches. These allow articles to rank for branded + semi-branded queries while routing bookings through bucketlistt. Partner brands: Himalayan Bungy, Splash Bungy, WhyNotFly, Maa Ganga Bungy.",
     "himalayan_bungy": [
       "himalayan bungy rishikesh",
       "himalayan bungy 117m",

@@ -11,7 +11,7 @@ LINK_PLACEMENT_BLOCK = """
     ╚══════════════════════════════════════════════════════════════════╝
 
     ❌ DO NOT place any external or booking links in the first 3 paragraphs
-    ❌ DO NOT put Bucketlistt URLs in the Introduction section
+    ❌ DO NOT put bucketlistt URLs in the Introduction section
     ✅ ALL booking/CTA links go in: body paragraphs (after para 4), FAQ answers, and conclusion ONLY
     ✅ Internal links to bucketlistt.com content are allowed anywhere
 """
@@ -65,15 +65,23 @@ REJECTION_CRITERIA = f"""
     ❌ MARKDOWN SYNTAX:
        - "**bold text**" → REJECTED (use <b>bold text</b>)
        - "- bullet point" → REJECTED (use <li>)
-    
+
+    ❌ LINK-DUMP SECTIONS (DO NOT WRITE THESE — THE PIPELINE INSERTS LINKS FOR YOU):
+       - NEVER add a heading like "Suggested Internal Links", "Related Links",
+         "Further Reading", or "Recommended Reading" followed by a bare list of links.
+       - Internal links are inserted programmatically after you write the article.
+         A visible link-list section duplicates them and reads as AI-generated
+         content-brief scaffolding that was never cleaned up.
+       - Links belong woven into sentences, never appended as their own labeled block.
+
     ❌ OTHER FAILURES:
        - Less than {Config.MIN_WORD_COUNT} words → REJECTED
        - Any language other than English → REJECTED
        - Missing Primary Keywords (< 3 mentions each) → REJECTED
        - (Brand Only) Missing '{Config.TARGET_CITY}' (< 5 mentions) → REJECTED
        - (Generic Only) Missing '{Config.TARGET_CITY}' in article about Rishikesh travel → REJECTED
-       - (Brand Only) No Bucketlistt reference anywhere in the article → REJECTED
-       - NOTE: Generic articles do NOT need a hard Bucketlistt CTA. One soft link in conclusion is optional.
+       - (Brand Only) No bucketlistt reference anywhere in the article → REJECTED
+       - NOTE: Generic articles do NOT need a hard bucketlistt CTA. One soft link in conclusion is optional.
 """
 
 EXACT_OUTPUT_FORMAT = f"""
@@ -123,7 +131,7 @@ EXACT_OUTPUT_FORMAT = f"""
     [MANDATORY: 7-10 questions. Source from Google Autocomplete + PAA boxes for the main keyword.]
     [CRITICAL: ONLY <h3> for questions, <p> for answers. NO <h2>, <h4>, <h5>, NO bullet points inside FAQ.]
     [Each answer: 2-4 sentences, direct and factual. Include main/secondary keyword where natural.]
-    [You MAY include 1 relevant Bucketlistt booking link inside a FAQ answer.]
+    [You MAY include 1 relevant bucketlistt booking link inside a FAQ answer.]
 
     <div itemscope itemprop="mainEntity" itemtype="https://schema.org/Question">
     <h3 itemprop="name">Question 1?</h3>

@@ -23,6 +23,19 @@ _SITEMAP_PATH = os.path.join(Config.CONFIG_DIR, "sitemap_mapping.json")
 class LinkSanitizer:
     """Utility to validate and auto-heal all hyperlinks in generated articles."""
 
+    # A small, hand-verified allowlist of real external authoritative sources the
+    # generator is permitted to cite (see prompts/content_prompts.py,
+    # _get_authoritative_citation_block) — a genuine trust/citation signal that
+    # everything else in the pipeline can't provide, since every other link this
+    # generator ever adds points back to bucketlistt or an approved partner.
+    # Kept tiny and explicit on purpose so it can't become a loophole for
+    # arbitrary or hallucinated external links: anything not in this list still
+    # gets rewritten back to bucketlistt below, same as before.
+    TRUSTED_EXTERNAL_DOMAINS = (
+        "uttarakhandtourism.gov.in",
+        "mausam.imd.gov.in",
+    )
+
     @classmethod
     def get_verified_live_urls(cls) -> Set[str]:
         """Returns a set of all verified live URLs from sitemap_mapping.json and Config."""
@@ -142,6 +155,9 @@ class LinkSanitizer:
             if href.startswith("#"):
                 continue
 
+            if any(domain in href for domain in cls.TRUSTED_EXTERNAL_DOMAINS):
+                continue
+
             # Normalize URL for comparison
             normalized_href = href.rstrip("/")
 
@@ -154,8 +170,13 @@ class LinkSanitizer:
             if is_dead_domain or is_unverified:
                 best_url = cls.find_best_matching_url(anchor_text, href)
                 a["href"] = best_url
-                a["target"] = "_blank"
-                a["rel"] = "noopener"
+                # ponytail: no target="_blank" here — every URL this sanitizer maps to
+                # is bucketlistt.com's own domain (get_verified_live_urls), so opening a
+                # new tab for it is never correct, whether the link was original or repaired.
+                if a.has_attr("target"):
+                    del a["target"]
+                if a.has_attr("rel"):
+                    del a["rel"]
                 logger.info(
                     "[LinkSanitizer] Replaced stale link '%s' (%s) -> '%s'",
                     anchor_text, href, best_url

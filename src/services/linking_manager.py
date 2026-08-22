@@ -1,7 +1,7 @@
 """
 linking_manager.py
 ------------------
-Injects contextual Bucketlistt.com backlinks and styled CTA widgets into generated
+Injects contextual bucketlistt.com backlinks and styled CTA widgets into generated
 article HTML *right before* WordPress publishing.
 
 Two-tier strategy (as per sitemap_linking_plan.md):
@@ -59,12 +59,16 @@ _SITEMAP_CONFIG: Dict = _load_sitemap_config()
 # ---------------------------------------------------------------------------
 
 def _build_anchor(text: str, url: str, title: str = "") -> str:
-    """Return a clean <a> tag for inline contextual linking."""
+    """Return a clean <a> tag for inline contextual linking.
+
+    ponytail: every URL this pipeline links to is bucketlistt.com itself
+    (see content_prompts.py's "NEVER add links to ANY third-party operator
+    website" rule and LinkSanitizer.get_verified_live_urls). Same-domain
+    links shouldn't force a new tab — that's a UX/SEO tell of a paid or
+    external link, and it fragments the visitor's session.
+    """
     title_attr = f' title="{title}"' if title else ""
-    return (
-        f'<a href="{url}" target="_blank" rel="noopener"'
-        f'{title_attr}>{text}</a>'
-    )
+    return f'<a href="{url}"{title_attr}>{text}</a>'
 
 
 def _build_cta_widget(
@@ -82,7 +86,7 @@ def _build_cta_widget(
 <div class="bucketlistt-cta-box" style="border:2px solid {button_color};padding:22px 24px;border-radius:10px;margin:32px 0;background:linear-gradient(135deg,#fff8f8 0%,#fff 100%);box-shadow:0 2px 12px rgba(255,90,95,0.08);font-family:inherit;">
   <h4 style="margin:0 0 10px 0;color:{button_color};font-size:1.05em;font-weight:700;letter-spacing:-0.01em;">{cta_title}</h4>
   <p style="margin:0 0 16px 0;color:#444;font-size:0.97em;line-height:1.6;">{cta_text}</p>
-  <a href="{cta_url}" target="_blank" rel="noopener sponsored"
+  <a href="{cta_url}"
      style="display:inline-block;background:{button_color};color:#fff;padding:10px 22px;border-radius:6px;text-decoration:none;font-weight:700;font-size:0.95em;letter-spacing:0.01em;transition:opacity 0.2s;"
      onmouseover="this.style.opacity='0.88'" onmouseout="this.style.opacity='1'">
     {button_text} →
@@ -97,7 +101,7 @@ def _build_cta_widget(
 
 class LinkingManager:
     """
-    Static service for injecting Bucketlistt.com links & CTA widgets into article HTML.
+    Static service for injecting bucketlistt.com links & CTA widgets into article HTML.
 
     Usage:
         from src.services.linking_manager import LinkingManager
@@ -127,7 +131,7 @@ class LinkingManager:
             return html
 
         if "bucketlistt-cta-box" in html:
-            logger.info("[LinkingManager] Bucketlistt linking already applied to '%s' — skipping.", full_title)
+            logger.info("[LinkingManager] bucketlistt linking already applied to '%s' — skipping.", full_title)
             return html
 
         activities_cfg: Dict = _SITEMAP_CONFIG.get("activities", {})
@@ -291,7 +295,7 @@ class LinkingManager:
                 display_text = override_text if override_text else matched_text
 
                 # Create the new <a> tag
-                link_tag = soup.new_tag("a", href=url, target="_blank", rel="noopener")
+                link_tag = soup.new_tag("a", href=url)
                 if title:
                     link_tag["title"] = title
                 link_tag.string = display_text
@@ -363,7 +367,7 @@ class LinkingManager:
         if best_activity_cfg:
             widget_html = _build_cta_widget(
                 cta_title=best_activity_cfg.get("cta_title", "🏔️ Book Your Adventure"),
-                cta_text=best_activity_cfg.get("cta_text", "Discover top-rated activities in Rishikesh on Bucketlistt."),
+                cta_text=best_activity_cfg.get("cta_text", "Discover top-rated activities in Rishikesh on bucketlistt."),
                 cta_url=best_activity_cfg.get("url", general_cta_cfg.get("url", "https://www.bucketlistt.com/rishikesh")),
                 button_text=best_activity_cfg.get("cta_button_text", "Book Now"),
                 button_color=general_cta_cfg.get("button_color", "#ff5a5f"),
@@ -372,7 +376,7 @@ class LinkingManager:
             # Fallback to generic Rishikesh CTA
             widget_html = _build_cta_widget(
                 cta_title=general_cta_cfg.get("title", "🏔️ Plan Your Rishikesh Adventure"),
-                cta_text=general_cta_cfg.get("text", "Discover all adventures in Rishikesh on Bucketlistt."),
+                cta_text=general_cta_cfg.get("text", "Discover all adventures in Rishikesh on bucketlistt."),
                 cta_url=general_cta_cfg.get("url", "https://www.bucketlistt.com/rishikesh"),
                 button_text=general_cta_cfg.get("button_text", "Explore All Rishikesh Activities"),
                 button_color=general_cta_cfg.get("button_color", "#ff5a5f"),

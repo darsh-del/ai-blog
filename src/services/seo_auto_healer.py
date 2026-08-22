@@ -145,6 +145,13 @@ class SEOAutoHealer:
                     count=2
                 )
 
+        # Strip any stray "Suggested Internal Links" style section the LLM wrote on its
+        # own — the pipeline inserts real internal links after this step, so a leftover
+        # bare list just duplicates them. Prompt-level ban lives in templates.py
+        # REJECTION_CRITERIA; this is the code-level backstop since prompt compliance
+        # isn't guaranteed.
+        healed_html = cls._heal_strip_link_dump_sections(healed_html)
+
         # Enforce location frequency (between 3 and 10) and add exact boosters
         healed_html = cls._heal_location_boosters(healed_html, article_type)
 
@@ -184,7 +191,7 @@ class SEOAutoHealer:
                         city_count, city_name)
 
         # ponytail: brand-in-heading stripping disabled — articles are now published BY
-        # Bucketlistt, so the brand name in body text is expected. The LLM shouldn't put
+        # bucketlistt, so the brand name in body text is expected. The LLM shouldn't put
         # it in H1/H2 titles (prompt handles that), but if it leaks in, it's fine.
 
         return html
@@ -291,6 +298,30 @@ class SEOAutoHealer:
 
         return faq
 
+    # Headings the LLM sometimes improvises for a "here are some links" section that
+    # the writing prompt never asked for and the pipeline's own link-injection step
+    # makes redundant. See REJECTION_CRITERIA in prompts/templates.py for the prompt-side ban.
+    _LINK_DUMP_HEADING_RE = re.compile(
+        r"<h[23][^>]*>\s*"
+        r"(?:suggested|related|recommended|further)\s+"
+        r"(?:internal\s+)?(?:links?|reading)\s*"
+        r"</h[23]>"
+        r"\s*(?:<ul[^>]*>.*?</ul>|<ol[^>]*>.*?</ol>)",
+        re.IGNORECASE | re.DOTALL,
+    )
+
+    @classmethod
+    def _heal_strip_link_dump_sections(cls, html: str) -> str:
+        """Removes any '<h2/h3>Suggested/Related/Further Reading|Links</h2/h3>' heading
+        immediately followed by a bare <ul>/<ol> of links — a stray LLM habit, not
+        something any prompt in this codebase asks for (see templates.py)."""
+        if not html:
+            return html
+        healed, count = cls._LINK_DUMP_HEADING_RE.subn("", html)
+        if count:
+            logger.info("[SEO_AUTO_HEAL] Stripped %d stray link-dump section(s) from content.", count)
+        return healed
+
     @classmethod
     def _heal_internal_links(cls, article: ArticleDraft) -> None:
         """Ensures the article draft contains at least one valid internal link."""
@@ -303,7 +334,7 @@ class SEOAutoHealer:
             article.internal_links.append(default_link)
             # Inject into the HTML if not already hyperlinked
             if f'href="{Config.DEFAULT_LINK_URL}"' not in article.content_html:
-                injection = f'<p>Ready for your next journey? <a href="{Config.DEFAULT_LINK_URL}" target="_blank" rel="noopener">{default_link.anchor_text}</a> today!</p>'
+                injection = f'<p>Ready for your next journey? <a href="{Config.DEFAULT_LINK_URL}">{default_link.anchor_text}</a> today!</p>'
                 article.content_html += f"\n{injection}"
 
     @classmethod

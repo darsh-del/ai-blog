@@ -58,7 +58,7 @@ class InternalLinkingService:
 
         if not live_links:
             live_links.append(InternalLink(
-                anchor_text=Config.DEFAULT_LINK_TEXT or "Explore Rishikesh Adventures on Bucketlistt",
+                anchor_text=Config.DEFAULT_LINK_TEXT or "Explore Rishikesh Adventures on bucketlistt",
                 target_url=Config.DEFAULT_LINK_URL,
                 relevance_score=1.0
             ))
@@ -108,7 +108,7 @@ class InternalLinkingService:
         # 4. Fill remaining slots to reach exactly 3 links if needed
         while len(links) < 3:
             links.append(InternalLink(
-                anchor_text=Config.DEFAULT_LINK_TEXT or "Explore Rishikesh Adventures on Bucketlistt",
+                anchor_text=Config.DEFAULT_LINK_TEXT or "Explore Rishikesh Adventures on bucketlistt",
                 target_url=Config.DEFAULT_LINK_URL,
                 relevance_score=0.5
             ))
@@ -155,7 +155,7 @@ class InternalLinkingService:
         Strategy (100% safe — no article-to-article links that may 404):
           Slot 1 & 2 — Two distinct verified-live activity page URLs from sitemap_mapping.json
                         (e.g. /river-rafting, /bungee-jumping, /camping …)
-          Slot 3      — The Bucketlistt homepage / DEFAULT_LINK_URL (always live)
+          Slot 3      — The bucketlistt homepage / DEFAULT_LINK_URL (always live)
 
         Article links from the CSV are intentionally NOT used because no articles
         in the database are currently published live, which would cause 404 errors.
@@ -172,7 +172,7 @@ class InternalLinkingService:
 
         # --- Slot 3: always the direct site homepage link ---
         internal_links.append(InternalLink(
-            anchor_text=Config.DEFAULT_LINK_TEXT or "Explore Rishikesh Adventures on Bucketlistt",
+            anchor_text=Config.DEFAULT_LINK_TEXT or "Explore Rishikesh Adventures on bucketlistt",
             target_url=Config.DEFAULT_LINK_URL,
             relevance_score=1.0
         ))
@@ -180,7 +180,7 @@ class InternalLinkingService:
         # --- Safety guard: pad with homepage link if sitemap had < 2 entries ---
         while len(internal_links) < 3:
             internal_links.append(InternalLink(
-                anchor_text=Config.DEFAULT_LINK_TEXT or "Explore Rishikesh Adventures on Bucketlistt",
+                anchor_text=Config.DEFAULT_LINK_TEXT or "Explore Rishikesh Adventures on bucketlistt",
                 target_url=Config.DEFAULT_LINK_URL,
                 relevance_score=0.8
             ))

@@ -647,13 +647,13 @@ class BlogGeneratorOrchestrator:
             links_count = len(it_article.internal_links) if it_article.internal_links else 0
             logger.debug("Article internal links count: %d", links_count)
 
-            # Apply Bucketlistt contextual links & CTA widget in core pipeline
+            # Apply bucketlistt contextual links & CTA widget in core pipeline
             try:
                 from src.services.linking_manager import LinkingManager
                 it_article.content_html = LinkingManager.inject_bucketlistt_links(it_article)
-                logger.info("[Orchestrator] Applied Bucketlistt linking to '%s'", it_article.title)
+                logger.info("[Orchestrator] Applied bucketlistt linking to '%s'", it_article.title)
             except Exception as link_err:
-                logger.warning("[Orchestrator] Failed to apply Bucketlistt linking: %s", link_err)
+                logger.warning("[Orchestrator] Failed to apply bucketlistt linking: %s", link_err)
 
             # Apply SEO Auto-Healing to programmatically guarantee high scores on the first iteration
             try:
@@ -687,8 +687,8 @@ class BlogGeneratorOrchestrator:
 
                 logger.info("SEO threshold reached. Saving and finalizing this article.")
 
-                # Final polish pass: rewrite prose to reduce AI-detector-style statistical
-                # tells. Runs only here, once, on the already-approved draft — never inside
+                # Final polish pass: rewrite prose for more natural sentence-rhythm variation.
+                # Runs only here, once, on the already-approved draft — never inside
                 # the retry loop, so it can't interfere with SEO scoring. Fails safe: keeps
                 # the original content untouched if the rewrite doesn't pass its own
                 # structural check (headings/links/keywords/word-count all preserved).
@@ -723,11 +723,14 @@ class BlogGeneratorOrchestrator:
                         "\nFOLLOW THIS CHECKLIST STRICTLY: Use 1 <h1>, at least 4 <h2>s, at least 2 <h3>s "
                         "under every <h2>, 10+ <p> paragraphs, at least one <ul>/<ol> with multiple <li>, "
                         "use <strong>/<b> to bold key phrases at least 10 times. "
-                        f"Mention '{Config.TARGET_CITY}' naturally between 4 and 8 times TOTAL. "
-                        f"MANDATORY: include at least 4 of these exact location phrases: "
+                        f"Mention '{Config.TARGET_CITY}' naturally between 4 and 8 times TOTAL, "
+                        f"varying the phrasing each time so it doesn't read as repeated keyword "
+                        f"stuffing — mix at least 4 different constructions, e.g. "
                         f"'in {Config.TARGET_CITY}', 'across {Config.TARGET_CITY}', "
-                        f"'top-rated in {Config.TARGET_CITY}', 'services in {Config.TARGET_CITY}', "
-                        f"'experts in {Config.TARGET_CITY}', 'best quality in {Config.TARGET_CITY}'. "
+                        f"'near {Config.TARGET_CITY}', 'a trip to {Config.TARGET_CITY}', "
+                        f"'exploring {Config.TARGET_CITY}', 'based in {Config.TARGET_CITY}', "
+                        f"'top-rated in {Config.TARGET_CITY}', 'services in {Config.TARGET_CITY}'. "
+                        f"Never repeat the exact same phrase twice in one article. "
                         f"Do NOT use '{Config.BRAND_NAME}' in any <h1> or <h2> heading."
                     )
                 else:
@@ -736,13 +739,16 @@ class BlogGeneratorOrchestrator:
                         "under every <h2>, 10+ <p> paragraphs, at least one <ul>/<ol> with multiple <li>, "
                         "use <strong>/<b> to bold key phrases at least 10 times. "
                         f"Write as a knowledgeable independent travel expert about {Config.TARGET_CITY}. "
-                        f"Naturally mention '{Config.TARGET_CITY}' between 4 and 8 times TOTAL in the article. "
-                        f"MANDATORY: include at least 4 of these exact location booster phrases (weave them naturally): "
+                        f"Naturally mention '{Config.TARGET_CITY}' between 4 and 8 times TOTAL in the article, "
+                        f"varying the phrasing each time so it doesn't read as repeated keyword "
+                        f"stuffing — mix at least 4 different constructions, e.g. "
                         f"'in {Config.TARGET_CITY}', 'across {Config.TARGET_CITY}', "
-                        f"'top-rated in {Config.TARGET_CITY}', 'services in {Config.TARGET_CITY}', "
-                        f"'experts in {Config.TARGET_CITY}', 'best quality in {Config.TARGET_CITY}'. "
+                        f"'near {Config.TARGET_CITY}', 'a trip to {Config.TARGET_CITY}', "
+                        f"'exploring {Config.TARGET_CITY}', 'based in {Config.TARGET_CITY}', "
+                        f"'top-rated in {Config.TARGET_CITY}', 'services in {Config.TARGET_CITY}'. "
+                        f"Never repeat the exact same phrase twice in one article. "
                         f"Do NOT mention '{Config.BRAND_NAME}' in any <h1> or <h2> heading. "
-                        f"The conclusion may have ONE soft Bucketlistt link — that is acceptable."
+                        f"The conclusion may have ONE soft bucketlistt link — that is acceptable."
                     )
                 prev_report_text = self._generate_seo_report_text(it_report, it_article)
                 reference_text = (

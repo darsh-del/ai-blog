@@ -316,7 +316,7 @@ class WordPressPublisher:
             flags=re.DOTALL | re.IGNORECASE
         )
 
-        # ── Bucketlistt.com Dynamic Linking ──────────────────────────────────
+        # ── bucketlistt.com Dynamic Linking ──────────────────────────────────
         # Inject contextual backlinks (Tier 1) and a CTA widget (Tier 2) into
         # the assembled HTML before sending it to the WP REST API.
         try:
@@ -324,9 +324,9 @@ class WordPressPublisher:
             article.content_html = content_ctx["full"]
             enriched_html = LinkingManager.inject_bucketlistt_links(article)
             content_ctx["full"] = enriched_html
-            logger.info("[WordPress] Bucketlistt linking applied to '%s'.", article.metadata.title or article.title)
+            logger.info("[WordPress] bucketlistt linking applied to '%s'.", article.metadata.title or article.title)
         except Exception as link_err:
-            logger.warning("[WordPress] Bucketlistt linking failed (non-fatal): %s", link_err)
+            logger.warning("[WordPress] bucketlistt linking failed (non-fatal): %s", link_err)
 
         # Prepare publish context
         # Use meta description if available, otherwise excerpt (already stripped/filtered in orchestrator)
