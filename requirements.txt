@@ -12,7 +12,7 @@ beautifulsoup4>=4.11.0
 html5lib>=1.1  # HTML parser for BeautifulSoup
 undetected-chromedriver>=3.5.0
 selenium>=4.15.0
-lxml>=4.9.0
+lxml>=6.1.2
 
 # LLM API wrapper with optimization
 google-genai>=0.1.0
