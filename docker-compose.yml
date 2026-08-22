@@ -1,7 +1,12 @@
 services:
   # Main blog generator API
   blog-generator:
+    # Local dev: `docker compose up --build` builds from source as before.
+    # CI/CD deploy: `docker compose pull && up -d --no-build` pulls the image
+    # the GitHub Actions pipeline already built, tagged by IMAGE_TAG in .env
+    # (defaults to :latest so this is a no-op until a deploy has run).
     build: .
+    image: ghcr.io/darsh-del/ai-blog:${IMAGE_TAG:-latest}
     container_name: blog-generator-api
     ports:
       - "8000:8000"
@@ -42,17 +47,19 @@ services:
       - WEAVIATE_HOST=weaviate
       - WEAVIATE_PORT=8080
       - WEAVIATE_GRPC_PORT=50051
-      - GOOGLE_APPLICATION_CREDENTIALS=/root/.config/gcloud/application_default_credentials.json
       # - BLOGGER_BLOG_ID=${BLOGGER_BLOG_ID}
       # - BLOGGER_TOKEN_FILE=${BLOGGER_TOKEN_FILE}
     volumes:
       - ./data:/app/data
       - ./src:/app/src
       - ./src/credentials:/app/credentials
-      - ./api:/app/api
+      # - ./api:/app/api  # uncomment once api/main.py exists (see Dockerfile TODOs)
       - ./prompts:/app/prompts
       - ./tokens:/app/tokens
-      - ${APPDATA}/gcloud:/root/.config/gcloud
+      # GOOGLE_APPLICATION_CREDENTIALS/gcloud ADC mount removed: USE_VERTEX_AI=False in
+      # .env means the app authenticates with GOOGLE_AI_STUDIO_API_KEY, not gcloud ADC.
+      # ${APPDATA} is also a Windows-only env var and breaks this bind mount on Linux/EC2.
+      # If you switch to USE_VERTEX_AI=True, mount a real ADC file path here instead.
 
     depends_on:
       - redis
