@@ -49,7 +49,10 @@ def test_config_defaults() -> None:
     assert Config.BASE_DIR is not None
     assert Config.CSV_PATH is not None
     assert isinstance(Config.BRAND_MENTION_RATIO, float)
-    assert Config.TARGET_CITY == "Rishikesh"
+    # TARGET_CITY has no fixed default (falls back to the "your_city" placeholder
+    # when unset) — it's env-driven, not a constant, so just assert it loaded as a
+    # non-empty string rather than asserting a specific deployment's city name.
+    assert isinstance(Config.TARGET_CITY, str) and Config.TARGET_CITY
 
 
 @patch('os.makedirs')
@@ -246,7 +249,10 @@ def low_score_article() -> ArticleDraft:
 
 def test_seo_auto_healer_optimizes_metadata(low_score_article: ArticleDraft) -> None:
     """Verify that title length, meta description, and focus keywords are auto-healed."""
-    healed = SEOAutoHealer.heal(low_score_article, ["trekking", "adventure"])
+    # SEOAutoHealer reads Config.TARGET_CITY to inject the city name into the title —
+    # pin it so this test doesn't depend on a real .env being present (CI has none).
+    with patch('src.services.seo_auto_healer.Config.TARGET_CITY', 'Rishikesh'):
+        healed = SEOAutoHealer.heal(low_score_article, ["trekking", "adventure"])
     assert 40 <= len(healed.metadata.title) <= 65
     assert "Rishikesh" in healed.metadata.title
     assert 120 <= len(healed.metadata.description) <= 155
