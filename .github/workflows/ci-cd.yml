@@ -36,7 +36,7 @@ jobs:
     name: Lint & test
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - uses: actions/setup-python@v5
         with:
@@ -71,7 +71,7 @@ jobs:
     outputs:
       image_tag: ${{ steps.tag.outputs.tag }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - id: tag
         run: echo "tag=sha-${GITHUB_SHA::12}" >> "$GITHUB_OUTPUT"
