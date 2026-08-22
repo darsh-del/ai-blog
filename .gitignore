@@ -2,7 +2,6 @@
 # SECRETS & CREDENTIALS  (NEVER commit these)
 # ============================================================
 .env
-*.env
 
 # Google OAuth credential files (download from Cloud Console)
 src/credentials/*.json
