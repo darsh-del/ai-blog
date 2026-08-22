@@ -101,9 +101,8 @@ debug_screenshots/
 *.tmp
 
 # ============================================================
-# TESTS & EXTRA CLUTTER
+# EXTRA CLUTTER
 # ============================================================
-tests/
 Photos/
 pylint_errors.txt
 
