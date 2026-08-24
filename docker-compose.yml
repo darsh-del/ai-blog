@@ -98,7 +98,14 @@ services:
       AUTHENTICATION_ANONYMOUS_ACCESS_ENABLED: 'true'
       PERSISTENCE_DATA_PATH: '/var/lib/weaviate'
       DEFAULT_VECTORIZER_MODULE: 'text2vec-google'
-      ENABLE_MODULES: 'text2vec-google'
+      # Both names enabled deliberately (verified live against weaviate:1.27.0): with only
+      # "text2vec-google" enabled, this server silently renames the collection's vectorizer
+      # to "text2vec-palm" on creation, and "text2vec-palm" alone is NOT recognized for
+      # nearText search on this version — queries fail with "Unknown argument nearText".
+      # With both enabled, the "text2vec-google" name the app requests is kept as-is and
+      # nearText works. See utils/utils.py VectorStoreManager._ensure_schema for the client
+      # -side half of this fix.
+      ENABLE_MODULES: 'text2vec-google,text2vec-palm'
       # Optional. Leave empty to let the app fall back to CSV-based internal links.
       GOOGLE_APIKEY: ${GOOGLE_AI_STUDIO_API_KEY}
       CLUSTER_HOSTNAME: 'node1'

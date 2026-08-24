@@ -731,4 +731,19 @@ class Config:
     # (via VectorStoreManager.find_similar_articles, 0-1 scale) against an already
     # -published article, it's sent back through the retry loop instead of being
     # accepted. No-op when Weaviate isn't configured (vector_store.client is None).
-    CONTENT_SIMILARITY_THRESHOLD = float(os.getenv("CONTENT_SIMILARITY_THRESHOLD", "0.93"))
+    #
+    # 0.82 is calibrated against real gemini-embedding-001 scores (find_similar_articles'
+    # 1/(1+cosine_distance) formula does NOT spread scores across the full 0-1 range —
+    # measured live against this exact Weaviate+model pairing on real article text, small
+    # sample, sanity-check not a rigorous calibration — watch the "[DuplicateContentGuard]"
+    # log lines against real traffic and adjust if it's over/under-firing):
+    #   word-for-word identical article:        ~0.86
+    #   same facts, reworded/paraphrased:        ~0.83
+    #   same topic, genuinely different facts:   ~0.78-0.80
+    #   unrelated topic:                         ~0.74-0.75
+    # A threshold of 0.93 (the original guess before this was measured) would never fire —
+    # not even on a literal duplicate. 0.82 sits just above the "different article, same
+    # topic" band, so it also catches close paraphrases (not just word-for-word copies) —
+    # a false positive here just costs one extra retry, while a missed duplicate is the
+    # actual problem this guard exists to catch, so it's tuned to lean toward catching more.
+    CONTENT_SIMILARITY_THRESHOLD = float(os.getenv("CONTENT_SIMILARITY_THRESHOLD", "0.82"))
