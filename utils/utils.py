@@ -22,12 +22,10 @@ logger = logging.getLogger(__name__)
 try:
     import weaviate
     from weaviate.exceptions import WeaviateBaseError
-    import weaviate.classes as wvc
     WEAVIATE_AVAILABLE = True
 except ImportError as e:
     WEAVIATE_AVAILABLE = False
     WeaviateBaseError = Exception
-    wvc = None
     logger.warning(
         "Weaviate client is not available: %s. Vector store features will be disabled.",
         e
@@ -494,20 +492,43 @@ class VectorStoreManager:
     def _ensure_schema(self, client: object) -> None:
         try:
             if not client.collections.exists(self.class_name):
-                client.collections.create(
-                    name=self.class_name,
-                    vectorizer_config=wvc.config.Configure.Vectorizer.text2vec_google(
-                        project_id=Config.GOOGLE_CLOUD_PROJECT,
-                        model_id="text-embedding-004",
-                        api_endpoint="generative-ai"
-                    ),
-                    properties=[
-                        wvc.config.Property(name="text", data_type=wvc.config.DataType.TEXT),
-                        wvc.config.Property(name="article_id", data_type=wvc.config.DataType.TEXT),
-                        wvc.config.Property(name="title", data_type=wvc.config.DataType.TEXT),
-                        wvc.config.Property(name="chunk_index", data_type=wvc.config.DataType.INT),
+                # Deliberately NOT using Configure.Vectorizer.text2vec_google() here: that
+                # convenience wrapper hardcodes its moduleConfig key to the legacy
+                # "text2vec-palm" name (weaviate-client internals, unrelated to any api_endpoint
+                # /model_id we pass it). Against the "text2vec-google"-only module this project's
+                # Weaviate container enables (see docker-compose.yml), that mismatch is silent
+                # for inserts but breaks nearText queries entirely ("Unknown argument nearText" —
+                # verified live). create_from_dict() is the client's own documented escape hatch
+                # for exactly this kind of schema-shape mismatch: it sends the raw dict as-is, so
+                # the moduleConfig key here is guaranteed to match what's actually enabled.
+                client.collections.create_from_dict({
+                    "class": self.class_name,
+                    "vectorizer": "text2vec-google",
+                    "moduleConfig": {
+                        "text2vec-google": {
+                            # Real Google AI Studio host — the old "generative-ai" value here
+                            # wasn't a resolvable hostname, so every embed call failed with a DNS
+                            # lookup error and add_article()/find_similar_articles() silently
+                            # no-op'd forever. project_id is required by the API shape but unused
+                            # once apiEndpoint points at the AI Studio host (that path
+                            # authenticates via the GOOGLE_APIKEY given to the Weaviate
+                            # container, not a GCP project).
+                            "apiEndpoint": "generativelanguage.googleapis.com",
+                            # "text-embedding-004" (the old value here) no longer exists on the
+                            # Generative Language API as of 2026 — confirmed via a live
+                            # ListModels call that "gemini-embedding-001" is the current stable
+                            # embedContent-capable model for this API key.
+                            "modelId": "gemini-embedding-001",
+                            "projectId": Config.GOOGLE_CLOUD_PROJECT,
+                        }
+                    },
+                    "properties": [
+                        {"name": "text", "dataType": ["text"]},
+                        {"name": "article_id", "dataType": ["text"]},
+                        {"name": "title", "dataType": ["text"]},
+                        {"name": "chunk_index", "dataType": ["int"]},
                     ],
-                )
+                })
         except (WeaviateBaseError, AttributeError, ValueError) as e:
             logger.warning("Could not ensure Weaviate schema: %s", e)
 
