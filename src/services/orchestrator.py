@@ -48,6 +48,35 @@ class BlogGeneratorOrchestrator:
         """Extracts plain text from HTML content."""
         return re.sub(r'<[^>]+>', ' ', html_content)
 
+    def _find_near_duplicate_match(self, article: ArticleDraft) -> Optional[Dict]:
+        """
+        Checks a passing draft against already-published articles for substantive
+        similarity (not just a duplicate title — TitleManager already handles that).
+        Reuses the existing Weaviate vector store, already populated by add_article()
+        after every publish, so this is a read-only check against real history.
+
+        Fails safe: returns None (no-op) whenever Weaviate isn't configured/reachable
+        or the check itself errors, so behaviour is unchanged when this guard can't run.
+        """
+        if not getattr(self.vector_store, "client", None):
+            return None
+        try:
+            plain_text = self._extract_text_from_html(article.content_html)
+            similar = self.vector_store.find_similar_articles(plain_text[:3000], k=1)
+            if similar and similar[0]["relevance_score"] >= Config.CONTENT_SIMILARITY_THRESHOLD:
+                logger.warning(
+                    "[DuplicateContentGuard] '%s' is %.0f%% similar to existing article "
+                    "'%s' (threshold %.0f%%) — rejecting this draft, will retry.",
+                    article.title[:60], similar[0]["relevance_score"] * 100,
+                    similar[0]["title"], Config.CONTENT_SIMILARITY_THRESHOLD * 100
+                )
+                return similar[0]
+        except (AttributeError, KeyError, TypeError, ValueError) as sim_err:
+            # find_similar_articles() already swallows Weaviate-layer errors internally
+            # (returns []); this only catches malformed-response edge cases here.
+            logger.debug("[DuplicateContentGuard] similarity check failed, proceeding normally: %s", sim_err)
+        return None
+
     def _contains_blocked_brand(self, text: str) -> bool:
         if not text or not isinstance(text, str):
             return False
@@ -548,7 +577,7 @@ class BlogGeneratorOrchestrator:
             "category": category or Config.get_random_category(article_type),
             "target_keywords": [],
             "dupe_check": {"all": self.csv_manager.get_all_articles(), "existing_titles": set()},
-            "best": {"article": None, "score": -1, "report": None, "product": None},
+            "best": {"article": None, "score": -1, "report": None, "product": None, "near_duplicate": False},
             "acc_stats": {
                 "cost": 0.0,
                 "tokens": {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0}
@@ -667,16 +696,22 @@ class BlogGeneratorOrchestrator:
 
             self._log_seo_metrics(it_report, it_article, iteration)
 
+            word_count_ok = Config.MIN_WORD_COUNT <= it_article.word_count <= Config.MAX_WORD_COUNT
+
+            # DUPLICATE CONTENT GUARD: an SEO-passing draft can still be near-identical
+            # in substance to an already-published article (same category, same template).
+            near_duplicate_match = self._find_near_duplicate_match(it_article) if it_report.passed else None
+
             if it_report.overall_score > blog_ctx["best"]["score"]:
                 blog_ctx["best"].update({
                     "article": it_article,
                     "score": it_report.overall_score,
                     "report": it_report,
-                    "product": it_product
+                    "product": it_product,
+                    "near_duplicate": bool(near_duplicate_match)
                 })
 
-            word_count_ok = Config.MIN_WORD_COUNT <= it_article.word_count <= Config.MAX_WORD_COUNT
-            if it_report.passed:
+            if it_report.passed and not near_duplicate_match:
                 # Update the article with the TOTAL accumulated cost/tokens before saving
                 it_article.cost = blog_ctx["acc_stats"]["cost"]
                 it_article.token_usage = blog_ctx["acc_stats"]["tokens"]
@@ -711,8 +746,17 @@ class BlogGeneratorOrchestrator:
                 return it_article, it_report, it_product
 
             if iteration < Config.MAX_ITERATIONS:
-                feedback = f"Previous attempt scored {it_report.overall_score}%. Key areas for improvement: "
-                feedback += ". ".join(it_report.improvement_suggestions)
+                if near_duplicate_match:
+                    feedback = (
+                        f"Previous attempt was {near_duplicate_match['relevance_score'] * 100:.0f}% similar "
+                        f"in substance to an already-published article ('{near_duplicate_match['title']}'). "
+                        "REWRITE with a genuinely different angle: different examples, different structure "
+                        "for the body sections, different specific details and anecdotes. Do not just "
+                        "reword the same points — cover the topic from a different practical perspective."
+                    )
+                else:
+                    feedback = f"Previous attempt scored {it_report.overall_score}%. Key areas for improvement: "
+                    feedback += ". ".join(it_report.improvement_suggestions)
                 if not word_count_ok:
                     feedback += (
                         f". CRITICAL: Adjust word count to be between {Config.MIN_WORD_COUNT}-{Config.MAX_WORD_COUNT}. "
@@ -764,6 +808,17 @@ class BlogGeneratorOrchestrator:
                     f"Article REJECTED: Did not meet SEO threshold of {Config.SEO_THRESHOLD}% "
                     f"(Best Score: {blog_ctx['best']['report'].overall_score}%). "
                     "This article will not be saved or published."
+                )
+                logger.error(error_msg)
+                raise BlogGenerationError(error_msg)
+            if blog_ctx["best"]["near_duplicate"]:
+                # Every retry (including the last one) was flagged as near-duplicate content.
+                # Raising here — instead of silently publishing a duplicate — lets the existing
+                # ConcurrentCampaignManager replenish-on-failure path queue a fresh replacement,
+                # exactly as it already does for BlogGenerationError/DuplicateArticleError.
+                error_msg = (
+                    f"Article REJECTED: '{blog_ctx['best']['article'].title}' remained a near-duplicate "
+                    f"of existing content after {Config.MAX_ITERATIONS} attempts. Not saved or published."
                 )
                 logger.error(error_msg)
                 raise BlogGenerationError(error_msg)
@@ -1386,81 +1441,339 @@ class BlogGeneratorOrchestrator:
         except Exception as error:
             logger.warning("Post-processing failed: %s", error)
     # ── Rishikesh Travel Scene Map ────────────────────────────────────────────
-    # 60+ diverse, location-specific scene descriptions for image generation.
-    # Covers adventure sports, spiritual landmarks, culture, food, nature.
-    # The 'defaults' key is a POOL — _get_travel_scene picks randomly from it.
+    # Each keyword maps to a POOL of 3 scene variants (same real place/activity,
+    # different moment/angle/detail) instead of one fixed sentence — previously
+    # every article matching a keyword (e.g. every "rafting" title) got the exact
+    # same scene text, which is why same-topic articles kept getting near-identical
+    # hero images. _get_travel_scene() now random.choice()s within the matched pool.
+    # The 'defaults' key is used when no keyword matches.
     RISHIKESH_TRAVEL_SCENES: dict = {
         # ── Adventure Sports ─────────────────────────────────────────────────
-        "bungee":       "thrill-seeker frozen mid-fall from the 83-metre bungee platform at Mohan Chatti cliff above the Ganges gorge, Rishikesh, arms spread wide, turquoise river far below, dramatic action photography",
-        "bungy":        "bungee jumper silhouetted against the bright blue Himalayan sky at the Rishikesh bungee jump point, Ganges river gorge below, sheer cliff walls",
-        "jump":         "SCAD freefall jumper dropping from a tall tower against an open Himalayan valley backdrop near Rishikesh, dramatic sky, pure adrenaline moment",
-        "scad":         "SCAD jump tower rising above the tree line near Rishikesh, Himalayan foothills stretching to the horizon, adventure infrastructure in wild nature",
-        "rafting":      "white-water rafters in bright helmets and life jackets plunging through grade-IV rapids on the Ganges between Shivpuri and Rishikesh, water spraying, raw adventure energy",
-        "river":        "kayakers paddling in a single-file line on the calm upper stretch of the Ganges near Marine Drive, Rishikesh, rocky jungle banks, morning mist",
-        "paragliding":  "tandem paraglider launching from a hilltop take-off ramp near Rishikesh, passenger and pilot soaring above a patchwork of green jungle and terracotta rooftops, Himalayan peaks on the horizon",
-        "camping":      "luxury tented campsite on a sandy beach beside the Ganges near Shivpuri, Rishikesh — glowing canvas tents, a bonfire reflected in still water, a star-filled Himalayan night sky",
-        "cycling":      "mountain bikers descending a red-dirt forest track through dense Sal trees in the Rajaji National Park buffer zone near Rishikesh, dappled morning light",
-        "kayaking":     "solo kayaker in a bright-orange kayak navigating emerald-green Class-II rapids with rocky forested canyon walls and overhanging vines on either side",
-        "zipline":      "zipline rider soaring over a deep jungle ravine on the 800-metre flying fox cable above the Ganges river near Rishikesh, bird's-eye view of the canopy below",
-        "cliff":        "Jumpin Heights bungee platform jutting over a sheer cliff edge above the turquoise Ganges gorge, green mountains beyond, golden afternoon light",
-        "swing":        "giant canyon swing arcing out over a dramatic river valley near Rishikesh, participant screaming with exhilaration, forested canyon walls",
-        "trekking":     "hikers on a steep stone-stepped trail ascending through rhododendron and oak forest toward Kunjapuri temple, misty Himalayan valley below, morning light",
-        "trek":         "trekkers resting at a rocky viewpoint above the Ganges valley near Rishikesh, panoramic view of river bend, jungle ridges, and distant snow peaks",
-        "hiking":       "solo hiker on a narrow ridgeline trail above Rishikesh at golden hour, silhouetted against an orange sky with Himalayan peaks in the distance",
-        "rock":         "climber ascending a vertical granite face on the Rishikesh climbing crag near Laxman Jhula, belayer below, green valley stretching behind",
-        "fox":          "flying fox cable car over a lush green gorge with the silver Ganges visible below, Rishikesh hills rolling to the horizon",
+        "bungee": [
+            "thrill-seeker frozen mid-fall from the 83-metre bungee platform at Mohan Chatti cliff above the Ganges gorge, Rishikesh, arms spread wide, turquoise river far below, dramatic action photography",
+            "close-up of a jumper's face mid-scream at the moment of release from the 83-metre platform at Mohan Chatti, Rishikesh, cliff edge and gorge visible behind, high-speed action photography",
+            "wide shot of the Mohan Chatti bungee tower at Rishikesh silhouetted against the sky, a jumper mid-fall as a tiny figure against the vast Ganges gorge, epic scale",
+        ],
+        "bungy": [
+            "bungee jumper silhouetted against the bright blue Himalayan sky at the Rishikesh bungee jump point, Ganges river gorge below, sheer cliff walls",
+            "spectators at the viewing deck cheering as a jumper leaps from the Rishikesh bungee platform, cliff walls and river gorge in the background",
+            "the recoil moment — a bungee jumper bouncing back up mid-cord above the Ganges gorge near Rishikesh, arms outstretched, sheer cliffs on both sides",
+        ],
+        "jump": [
+            "SCAD freefall jumper dropping from a tall tower against an open Himalayan valley backdrop near Rishikesh, dramatic sky, pure adrenaline moment",
+            "a jumper's harness and cable stretched taut mid-freefall from a tall tower near Rishikesh, valley and forested hills sprawling below",
+            "the instant of launch — a freefall jumper stepping off the tower platform near Rishikesh, open Himalayan valley stretching to the horizon",
+        ],
+        "scad": [
+            "SCAD jump tower rising above the tree line near Rishikesh, Himalayan foothills stretching to the horizon, adventure infrastructure in wild nature",
+            "looking straight up at the SCAD tower structure near Rishikesh from its base, steel lattice against a blue sky, forest all around",
+            "aerial view of the SCAD jump tower and its surrounding adventure park near Rishikesh, green foothills and a winding access road below",
+        ],
+        "rafting": [
+            "white-water rafters in bright helmets and life jackets plunging through grade-IV rapids on the Ganges between Shivpuri and Rishikesh, water spraying, raw adventure energy",
+            "a rafting guide shouting paddle commands as the boat crests a rapid on the Ganges near Shivpuri, spray catching the sunlight, teammates paddling hard",
+            "a raft angled sideways through a rapid on the Ganges near Rishikesh, rafters gripping the safety line, whitewater exploding around the boat",
+        ],
+        "river": [
+            "kayakers paddling in a single-file line on the calm upper stretch of the Ganges near Marine Drive, Rishikesh, rocky jungle banks, morning mist",
+            "a lone paddleboarder gliding across a still stretch of the Ganges near Marine Drive, Rishikesh, mist rising off the water at dawn",
+            "a group of kayaks resting on the riverbank near Marine Drive, Rishikesh, paddlers taking a break, jungle-covered hills reflected in the calm water",
+        ],
+        "paragliding": [
+            "tandem paraglider launching from a hilltop take-off ramp near Rishikesh, passenger and pilot soaring above a patchwork of green jungle and terracotta rooftops, Himalayan peaks on the horizon",
+            "a paraglider canopy fully inflated overhead moments before takeoff on a hilltop ramp near Rishikesh, pilot and passenger braced to run",
+            "aerial point-of-view from a paraglider soaring over Rishikesh — the Ganges winding below, terracotta rooftops, green jungle patchwork, Himalayan peaks in the distance",
+        ],
+        "camping": [
+            "luxury tented campsite on a sandy beach beside the Ganges near Shivpuri, Rishikesh — glowing canvas tents, a bonfire reflected in still water, a star-filled Himalayan night sky",
+            "glamping tents on a riverside beach near Shivpuri, Rishikesh, lit by string lights at dusk, campers gathered around a crackling bonfire",
+            "morning at a riverside campsite near Shivpuri, Rishikesh — canvas tents catching the first sunlight, mist over the Ganges, a kettle steaming over embers",
+        ],
+        "cycling": [
+            "mountain bikers descending a red-dirt forest track through dense Sal trees in the Rajaji National Park buffer zone near Rishikesh, dappled morning light",
+            "a mountain biker airborne off a small dirt jump on a forest trail near Rishikesh, Sal trees and dappled light all around",
+            "a line of mountain bikers pausing at a forest clearing viewpoint near Rishikesh, bikes leaned against trees, green valley visible through the canopy",
+        ],
+        "kayaking": [
+            "solo kayaker in a bright-orange kayak navigating emerald-green Class-II rapids with rocky forested canyon walls and overhanging vines on either side",
+            "a kayaker bracing through a standing wave on a Class-II rapid near Rishikesh, spray flying, forested canyon walls rising on both sides",
+            "a line of orange kayaks eddying into calm water below a rapid near Rishikesh, paddlers catching their breath, jungle canyon walls above",
+        ],
+        "zipline": [
+            "zipline rider soaring over a deep jungle ravine on the 800-metre flying fox cable above the Ganges river near Rishikesh, bird's-eye view of the canopy below",
+            "a zipline rider's silhouette against the sky mid-flight on the 800-metre cable above the Ganges near Rishikesh, jungle canopy far below",
+            "the zipline launch platform above a jungle ravine near Rishikesh, a rider clipped in and ready, the Ganges river visible far below through the trees",
+        ],
+        "cliff": [
+            "Jumpin Heights bungee platform jutting over a sheer cliff edge above the turquoise Ganges gorge, green mountains beyond, golden afternoon light",
+            "close-up of the Jumpin Heights platform edge above the Ganges gorge near Rishikesh, safety harnesses visible, sheer drop below, golden light",
+            "wide shot of the cliff face at Jumpin Heights near Rishikesh from across the gorge, the platform tiny against the rock, turquoise river far below",
+        ],
+        "swing": [
+            "giant canyon swing arcing out over a dramatic river valley near Rishikesh, participant screaming with exhilaration, forested canyon walls",
+            "the moment of release on a giant canyon swing near Rishikesh — cables taut, participant mid-arc over the river valley below",
+            "spectators watching from a platform as a canyon swing rider arcs out over the forested valley near Rishikesh, cables catching the sunlight",
+        ],
+        "trekking": [
+            "hikers on a steep stone-stepped trail ascending through rhododendron and oak forest toward Kunjapuri temple, misty Himalayan valley below, morning light",
+            "a hiker pausing at a switchback on the stone-stepped trail to Kunjapuri temple, catching their breath, misty valley opening up below",
+            "a group of trekkers reaching a forest clearing on the trail to Kunjapuri temple, rhododendron blooms around them, first light through the canopy",
+        ],
+        "trek": [
+            "trekkers resting at a rocky viewpoint above the Ganges valley near Rishikesh, panoramic view of river bend, jungle ridges, and distant snow peaks",
+            "a lone trekker's silhouette on a ridgeline above the Ganges valley near Rishikesh, snow peaks catching the last light",
+            "trekking poles and boots on a rocky outcrop above the Ganges valley near Rishikesh, panoramic view of the river bend beyond",
+        ],
+        "hiking": [
+            "solo hiker on a narrow ridgeline trail above Rishikesh at golden hour, silhouetted against an orange sky with Himalayan peaks in the distance",
+            "a hiker's boots on a narrow forest trail above Rishikesh, dappled light through the canopy, Himalayan ridgelines glimpsed through the trees",
+            "a hiker reaching a rocky summit above Rishikesh at dawn, arms raised, mist filling the valleys between distant Himalayan peaks",
+        ],
+        "rock": [
+            "climber ascending a vertical granite face on the Rishikesh climbing crag near Laxman Jhula, belayer below, green valley stretching behind",
+            "close-up of a climber's chalked hands gripping a hold on the granite crag near Laxman Jhula, Rishikesh, concentration on their face",
+            "a climber topping out on the crag near Laxman Jhula, Rishikesh, the Ganges and green valley spread out below in the afternoon light",
+        ],
+        "fox": [
+            "flying fox cable car over a lush green gorge with the silver Ganges visible below, Rishikesh hills rolling to the horizon",
+            "a rider mid-flight on the flying fox cable over a green gorge near Rishikesh, arms spread, jungle canopy rushing past below",
+            "the flying fox cable stretching across a gorge near Rishikesh at sunset, silhouette of a rider crossing, golden light on the hills",
+        ],
         # ── Spiritual & Cultural Landmarks ───────────────────────────────────
-        "aarti":        "Triveni Ghat Ganga Aarti ceremony at dusk — priests in saffron robes holding flaming brass diyas, golden light reflected in the sacred Ganges, flower offerings floating downstream",
-        "ghat":         "Triveni Ghat at sunrise — a lone devotee immersed waist-deep in the misty Ganges, ancient stone steps, marigold petals on the water surface",
-        "triveni":      "Triveni Ghat at the blue hour before dawn, candles and diyas floating on the Ganges, a single boatman silhouetted on the sacred water",
-        "temple":       "Tera Manzil Temple (Trimbakeshwar) — a towering 13-storey ochre temple rising above the treetops at Ram Jhula, Rishikesh, ornate carvings, prayer flags, blue sky",
-        "neelkanth":    "Neelkanth Mahadev Temple perched on a forested hill 32 km from Rishikesh — white marble spire, dense jungle canopy, pilgrims on stone steps, bright marigold garlands",
-        "bharat":       "Bharat Mandir — one of Rishikesh's oldest temples, grey stone exterior with intricate carvings, banyan tree in the courtyard, incense smoke",
-        "ashram":       "Parmarth Niketan Ashram's grand courtyard on the Ganges bank, Rishikesh — saffron-clad monks, incense smoke, ancient stone statues draped in marigolds, spiritual tranquility",
-        "beatles":      "Beatles Ashram (Chaurasi Kutia), Rishikesh — crumbling meditation domes overgrown with jungle vines, psychedelic mural on a curved wall, ethereal abandoned architecture",
-        "meditation":   "solitary meditator in lotus position on a flat rock above the Ganges, Rishikesh — eyes closed, gentle mist, Himalayan forest reflected in still water, absolute stillness",
-        "yoga":         "a yoga teacher leading a morning class in Warrior II pose on a rooftop shala above Laxman Jhula, Rishikesh, the Ganges and green hills stretching behind",
-        "spiritual":    "evening aarti at Parmarth Niketan — thousands of marigold lamps floating on the Ganges, priests chanting, smoke and golden light over the sacred river",
-        "prayer":       "sadhus sitting cross-legged near the Ram Jhula bridge in Rishikesh, rudraksha beads, saffron robes, incense sticks, serene expressions",
+        "aarti": [
+            "Triveni Ghat Ganga Aarti ceremony at dusk — priests in saffron robes holding flaming brass diyas, golden light reflected in the sacred Ganges, flower offerings floating downstream",
+            "close-up of a priest's hands waving a multi-tiered brass diya during the Triveni Ghat aarti, Rishikesh, flames reflected in his eyes",
+            "a wide crowd shot of devotees seated on the steps of Triveni Ghat during the evening aarti, hundreds of small oil lamps glowing in the twilight",
+        ],
+        "ghat": [
+            "Triveni Ghat at sunrise — a lone devotee immersed waist-deep in the misty Ganges, ancient stone steps, marigold petals on the water surface",
+            "pilgrims descending the wide stone steps of Triveni Ghat at dawn, mist rising off the Ganges, temple bells visible in the background",
+            "a close view of marigold petals and floating diyas drifting past the stone steps of Triveni Ghat, Rishikesh, in the soft morning light",
+        ],
+        "triveni": [
+            "Triveni Ghat at the blue hour before dawn, candles and diyas floating on the Ganges, a single boatman silhouetted on the sacred water",
+            "the stone steps of Triveni Ghat empty at first light, a few floating diyas still glowing on the still Ganges water",
+            "a wide shot of Triveni Ghat at dusk with the temple spires lit and reflected in the Ganges, a handful of pilgrims lighting lamps",
+        ],
+        "temple": [
+            "Tera Manzil Temple (Trimbakeshwar) — a towering 13-storey ochre temple rising above the treetops at Ram Jhula, Rishikesh, ornate carvings, prayer flags, blue sky",
+            "looking up at the tiered ochre facade of Tera Manzil Temple near Ram Jhula, Rishikesh, prayer flags fluttering against a clear blue sky",
+            "the Tera Manzil Temple reflected in the Ganges at Ram Jhula, Rishikesh, evening light warming its ochre walls, pilgrims crossing the bridge nearby",
+        ],
+        "neelkanth": [
+            "Neelkanth Mahadev Temple perched on a forested hill 32 km from Rishikesh — white marble spire, dense jungle canopy, pilgrims on stone steps, bright marigold garlands",
+            "close-up of the white marble spire of Neelkanth Mahadev Temple against a backdrop of dense Himalayan jungle near Rishikesh",
+            "pilgrims climbing the stone steps to Neelkanth Mahadev Temple near Rishikesh, marigold garland stalls lining the path, forest all around",
+        ],
+        "bharat": [
+            "Bharat Mandir — one of Rishikesh's oldest temples, grey stone exterior with intricate carvings, banyan tree in the courtyard, incense smoke",
+            "close-up of the intricately carved grey stone facade of Bharat Mandir, Rishikesh, incense smoke curling upward in the courtyard light",
+            "the ancient banyan tree in the courtyard of Bharat Mandir, Rishikesh, its roots draped over old stone, a few worshippers seated in its shade",
+        ],
+        "ashram": [
+            "Parmarth Niketan Ashram's grand courtyard on the Ganges bank, Rishikesh — saffron-clad monks, incense smoke, ancient stone statues draped in marigolds, spiritual tranquility",
+            "rows of saffron-clad monks seated in meditation in the courtyard of Parmarth Niketan Ashram, Rishikesh, morning light through incense smoke",
+            "a wide view of Parmarth Niketan Ashram's riverside courtyard at dusk, marigold-draped statues glowing under lamplight, the Ganges beyond",
+        ],
+        "beatles": [
+            "Beatles Ashram (Chaurasi Kutia), Rishikesh — crumbling meditation domes overgrown with jungle vines, psychedelic mural on a curved wall, ethereal abandoned architecture",
+            "close-up of a faded psychedelic mural on a curved wall inside the Beatles Ashram, Rishikesh, jungle vines creeping through a broken window",
+            "a visitor walking through the overgrown meditation domes of the Beatles Ashram, Rishikesh, dappled light filtering through the jungle canopy above",
+        ],
+        "meditation": [
+            "solitary meditator in lotus position on a flat rock above the Ganges, Rishikesh — eyes closed, gentle mist, Himalayan forest reflected in still water, absolute stillness",
+            "close-up of a meditator's folded hands resting in their lap on a riverside rock in Rishikesh, morning mist rising off the Ganges behind them",
+            "a wide shot of a meditator as a small silhouette on a rock above the misty Ganges at dawn, Rishikesh, forested hills all around",
+        ],
+        "yoga": [
+            "a yoga teacher leading a morning class in Warrior II pose on a rooftop shala above Laxman Jhula, Rishikesh, the Ganges and green hills stretching behind",
+            "a row of students holding downward dog on a sunlit rooftop yoga shala above Laxman Jhula, Rishikesh, the Ganges visible below",
+            "close-up of bare feet and a yoga mat on a wooden rooftop deck above Rishikesh, green hills and morning mist in soft focus behind",
+        ],
+        "spiritual": [
+            "evening aarti at Parmarth Niketan — thousands of marigold lamps floating on the Ganges, priests chanting, smoke and golden light over the sacred river",
+            "hundreds of devotees singing together at the evening aarti at Parmarth Niketan, Rishikesh, oil lamps lighting up their faces in the dusk",
+            "a close view of marigold lamps drifting downstream on the Ganges after the Parmarth Niketan aarti, Rishikesh, golden reflections on the water",
+        ],
+        "prayer": [
+            "sadhus sitting cross-legged near the Ram Jhula bridge in Rishikesh, rudraksha beads, saffron robes, incense sticks, serene expressions",
+            "close-up portrait of a sadhu's weathered face near Ram Jhula, Rishikesh, rudraksha beads around his neck, incense smoke drifting past",
+            "a group of sadhus chatting on the riverside steps near Ram Jhula, Rishikesh, saffron robes bright against the grey stone, the Ganges behind them",
+        ],
         # ── Iconic Bridges & Landmarks ───────────────────────────────────────
-        "laxman":       "Laxman Jhula suspension bridge over the emerald Ganges in Rishikesh — orange-painted steel cables, colourful prayer flags, pilgrims and tourists crossing, forested hills beyond",
-        "ram":          "Ram Jhula iron suspension bridge in Rishikesh — pedestrians, cattle, and pilgrims crossing together, Tera Manzil Temple rising above the far bank",
-        "bridge":       "view from the middle of Laxman Jhula looking downstream — the Ganges curving between forested hills, small temples on the banks, morning mist",
-        "jhula":        "pedestrians and pilgrims crossing Ram Jhula suspension bridge in Rishikesh, colourful prayer flags fluttering, green mountains behind",
+        "laxman": [
+            "Laxman Jhula suspension bridge over the emerald Ganges in Rishikesh — orange-painted steel cables, colourful prayer flags, pilgrims and tourists crossing, forested hills beyond",
+            "close-up of the orange steel cables and prayer flags of Laxman Jhula, Rishikesh, with the emerald Ganges flowing far below",
+            "a wide shot of Laxman Jhula bridge from the riverbank at sunset, Rishikesh, silhouettes of pedestrians crossing against a glowing sky",
+        ],
+        "ram": [
+            "Ram Jhula iron suspension bridge in Rishikesh — pedestrians, cattle, and pilgrims crossing together, Tera Manzil Temple rising above the far bank",
+            "looking along the length of Ram Jhula bridge, Rishikesh, at rush hour — pedestrians, motorbikes, and a cow all crossing together",
+            "Ram Jhula bridge reflected in the calm Ganges at dawn, Rishikesh, Tera Manzil Temple's spire catching the first light on the far bank",
+        ],
+        "bridge": [
+            "view from the middle of Laxman Jhula looking downstream — the Ganges curving between forested hills, small temples on the banks, morning mist",
+            "looking straight down through the grated deck of a Rishikesh suspension bridge at the emerald Ganges rushing below",
+            "a wide aerial view of a Rishikesh suspension bridge spanning the Ganges, forested hills and small temple spires on both banks",
+        ],
+        "jhula": [
+            "pedestrians and pilgrims crossing Ram Jhula suspension bridge in Rishikesh, colourful prayer flags fluttering, green mountains behind",
+            "close-up of prayer flags fluttering along the cables of a Rishikesh suspension bridge, the Ganges glinting below",
+            "a lone monk crossing a Rishikesh suspension bridge at dawn, mist rising off the Ganges, green mountains fading into the haze",
+        ],
         # ── Nature & Waterfalls ───────────────────────────────────────────────
-        "waterfall":    "Neer Garh waterfall cascading in three tiers through a lush jungle gorge near Rishikesh — white water, deep green ferns, natural swimming pool at the base, dappled sunlight",
-        "neer":         "Neer Garh waterfall hidden in dense forest near Rishikesh — turquoise pool, mossy rocks, curtain of white water, a solitary hiker admiring the view",
-        "garud":        "Garud Chatti waterfall — a slim ribbon of white water dropping into a rocky pool surrounded by thick subtropical forest near Rishikesh",
-        "kunjapuri":    "Kunjapuri Devi Temple at dawn — ancient stone shrine on a forested summit with a 360-degree panorama of Himalayan peaks above a sea of clouds, glowing orange sunrise",
-        "sunrise":      "sunrise seen from Kunjapuri temple hill above Rishikesh — fiery orange sky, snow-capped Himalayan peaks emerging from misty valleys, absolute silence",
-        "rajaji":       "wild Asian elephant moving through tall grass in Rajaji National Park near Rishikesh, Himalayan foothills in the background, wildlife photography",
-        "wildlife":     "spotted deer grazing in a forest clearing in Rajaji National Park near Rishikesh, golden afternoon light filtering through Sal trees",
-        "forest":       "a misty Himalayan trail winding through ancient Sal forest near Rishikesh — gnarled roots, dappled light, the sound of birdsong, no other people visible",
-        "jungle":       "dense tropical jungle path near Phool Chatti ashram, Rishikesh — hanging vines, shafts of sunlight, a butterfly on a wildflower",
+        "waterfall": [
+            "Neer Garh waterfall cascading in three tiers through a lush jungle gorge near Rishikesh — white water, deep green ferns, natural swimming pool at the base, dappled sunlight",
+            "close-up of white water crashing over the middle tier of Neer Garh waterfall near Rishikesh, mist rising, ferns dripping on the rocks",
+            "swimmers relaxing in the natural pool at the base of Neer Garh waterfall near Rishikesh, sunlight filtering through the jungle canopy above",
+        ],
+        "neer": [
+            "Neer Garh waterfall hidden in dense forest near Rishikesh — turquoise pool, mossy rocks, curtain of white water, a solitary hiker admiring the view",
+            "a wide shot of Neer Garh waterfall's full cascade through the forest canopy near Rishikesh, turquoise pool glowing below",
+            "close-up of mossy rocks and ferns beside the turquoise pool at Neer Garh waterfall near Rishikesh, dappled sunlight on the water",
+        ],
+        "garud": [
+            "Garud Chatti waterfall — a slim ribbon of white water dropping into a rocky pool surrounded by thick subtropical forest near Rishikesh",
+            "close-up of the thin cascade of Garud Chatti waterfall near Rishikesh hitting the rocky pool below, spray catching the light",
+            "a hiker standing beside the rocky pool at Garud Chatti waterfall near Rishikesh, dense subtropical forest rising on all sides",
+        ],
+        "kunjapuri": [
+            "Kunjapuri Devi Temple at dawn — ancient stone shrine on a forested summit with a 360-degree panorama of Himalayan peaks above a sea of clouds, glowing orange sunrise",
+            "silhouette of Kunjapuri Devi Temple's stone shrine against a fiery sunrise sky, a sea of clouds filling the valleys below",
+            "pilgrims gathered on the summit platform at Kunjapuri Devi Temple at dawn, snow-capped Himalayan peaks emerging through the clouds",
+        ],
+        "sunrise": [
+            "sunrise seen from Kunjapuri temple hill above Rishikesh — fiery orange sky, snow-capped Himalayan peaks emerging from misty valleys, absolute silence",
+            "the first sliver of sun breaking over snow-capped Himalayan peaks, seen from Kunjapuri hill above Rishikesh, valleys still in shadow",
+            "silhouettes of early-morning visitors watching sunrise from Kunjapuri hill above Rishikesh, golden light spreading across the misty valley",
+        ],
+        "rajaji": [
+            "wild Asian elephant moving through tall grass in Rajaji National Park near Rishikesh, Himalayan foothills in the background, wildlife photography",
+            "a herd of elephants crossing a shallow stream in Rajaji National Park near Rishikesh, forested foothills behind them",
+            "close-up of an Asian elephant's face among tall grass in Rajaji National Park near Rishikesh, morning light filtering through the trees",
+        ],
+        "wildlife": [
+            "spotted deer grazing in a forest clearing in Rajaji National Park near Rishikesh, golden afternoon light filtering through Sal trees",
+            "a peacock displaying its feathers in a forest clearing in Rajaji National Park near Rishikesh, dappled Sal-tree light behind it",
+            "a langur monkey perched on a low branch in Rajaji National Park near Rishikesh, forest canopy and golden light behind",
+        ],
+        "forest": [
+            "a misty Himalayan trail winding through ancient Sal forest near Rishikesh — gnarled roots, dappled light, the sound of birdsong, no other people visible",
+            "shafts of morning light cutting through the mist in an ancient Sal forest near Rishikesh, a narrow trail disappearing into the trees",
+            "close-up of gnarled tree roots and moss on a forest trail near Rishikesh, dappled light and mist filtering through the canopy above",
+        ],
+        "jungle": [
+            "dense tropical jungle path near Phool Chatti ashram, Rishikesh — hanging vines, shafts of sunlight, a butterfly on a wildflower",
+            "close-up of hanging vines and shafts of sunlight on a jungle path near Phool Chatti ashram, Rishikesh",
+            "a wide shot of the dense jungle canopy near Phool Chatti ashram, Rishikesh, a narrow dirt path winding through ferns and undergrowth",
+        ],
         # ── Food, Market & Culture ────────────────────────────────────────────
-        "food":         "vibrant thali spread at a local dhaba in Rishikesh — dal, sabzi, roti, rice, pickle, and chai on a steel tray, colourful and aromatic, authentic Indian street food photography",
-        "café":         "a cosy rooftop café in Rishikesh overlooking the Ganges — macramé décor, potted succulents, a chai glass and a journal on a wooden table, Himalayan breeze",
-        "cafe":         "a cosy rooftop café in Rishikesh overlooking the Ganges — macramé décor, potted succulents, a chai glass and a journal on a wooden table, Himalayan breeze",
-        "restaurant":   "outdoor dining terrace of a riverside restaurant in Rishikesh at sunset — fairy lights, wooden tables, stone floor, Ganges river glowing pink in the background",
-        "market":       "Ram Jhula market street in Rishikesh — stalls overflowing with rudraksha malas, crystal bowls, incense, tie-dye clothing, and Ayurvedic herbs, pilgrims and tourists browsing",
-        "shopping":     "narrow lane in the Laxman Jhula market area, Rishikesh — colourful cloth banners, handicraft stalls, prayer flags overhead, warm afternoon light",
-        "hostel":       "a vibrant backpacker hostel rooftop in Rishikesh at dusk — hammocks, fairy lights, young travellers chatting, the Ganges visible below, Himalayan silhouette",
-        "hotel":        "a luxury boutique resort perched above the Ganges in Rishikesh — infinity pool reflecting the sky, terrace lounge, lush green hills, pure silence",
-        "spa":          "a calming Ayurvedic treatment room in Rishikesh — warm terracotta walls, a massage table with fresh rose petals, oil lamps, scent of sandalwood",
+        "food": [
+            "vibrant thali spread at a local dhaba in Rishikesh — dal, sabzi, roti, rice, pickle, and chai on a steel tray, colourful and aromatic, authentic Indian street food photography",
+            "close-up of steam rising off fresh rotis being cooked on a tawa at a Rishikesh dhaba, flour dusting the cook's hands",
+            "a traveller eating a thali with their hands at a riverside dhaba table in Rishikesh, the Ganges visible through the open doorway",
+        ],
+        "café": [
+            "a cosy rooftop café in Rishikesh overlooking the Ganges — macramé décor, potted succulents, a chai glass and a journal on a wooden table, Himalayan breeze",
+            "close-up of a steaming chai glass and an open journal on a rooftop café table in Rishikesh, the Ganges blurred in the background",
+            "a traveller relaxing in a hammock chair at a rooftop café in Rishikesh, string lights overhead, green hills visible beyond the railing",
+        ],
+        "cafe": [
+            "a cosy rooftop café in Rishikesh overlooking the Ganges — macramé décor, potted succulents, a chai glass and a journal on a wooden table, Himalayan breeze",
+            "close-up of a steaming chai glass and an open journal on a rooftop café table in Rishikesh, the Ganges blurred in the background",
+            "a traveller relaxing in a hammock chair at a rooftop café in Rishikesh, string lights overhead, green hills visible beyond the railing",
+        ],
+        "restaurant": [
+            "outdoor dining terrace of a riverside restaurant in Rishikesh at sunset — fairy lights, wooden tables, stone floor, Ganges river glowing pink in the background",
+            "close-up of a plated meal on a wooden table at a riverside restaurant terrace in Rishikesh, fairy lights softly blurred behind",
+            "diners chatting at a riverside restaurant terrace in Rishikesh as the sun sets over the Ganges, warm string lights coming on",
+        ],
+        "market": [
+            "Ram Jhula market street in Rishikesh — stalls overflowing with rudraksha malas, crystal bowls, incense, tie-dye clothing, and Ayurvedic herbs, pilgrims and tourists browsing",
+            "close-up of rudraksha malas and crystal bowls displayed at a stall in the Ram Jhula market, Rishikesh, afternoon light",
+            "a busy afternoon at the Ram Jhula market street, Rishikesh, vendors calling out, tourists browsing tie-dye clothing and incense stalls",
+        ],
+        "shopping": [
+            "narrow lane in the Laxman Jhula market area, Rishikesh — colourful cloth banners, handicraft stalls, prayer flags overhead, warm afternoon light",
+            "close-up of colourful handicrafts and tie-dye scarves hanging at a stall in the Laxman Jhula market lane, Rishikesh",
+            "shoppers browsing a narrow market lane near Laxman Jhula, Rishikesh, prayer flags strung overhead, warm evening light",
+        ],
+        "hostel": [
+            "a vibrant backpacker hostel rooftop in Rishikesh at dusk — hammocks, fairy lights, young travellers chatting, the Ganges visible below, Himalayan silhouette",
+            "close-up of a hammock strung between bamboo posts on a hostel rooftop in Rishikesh, fairy lights glowing at dusk",
+            "a group of backpackers playing guitar and chatting on a hostel rooftop in Rishikesh at sunset, the Ganges glowing below",
+        ],
+        "hotel": [
+            "a luxury boutique resort perched above the Ganges in Rishikesh — infinity pool reflecting the sky, terrace lounge, lush green hills, pure silence",
+            "close-up of an infinity pool's edge at a boutique resort above the Ganges in Rishikesh, green hills reflected in the still water",
+            "a terrace lounge at a boutique resort above the Ganges in Rishikesh at sunset, empty loungers, the river glowing pink below",
+        ],
+        "spa": [
+            "a calming Ayurvedic treatment room in Rishikesh — warm terracotta walls, a massage table with fresh rose petals, oil lamps, scent of sandalwood",
+            "close-up of rose petals and a small oil lamp on a massage table in an Ayurvedic treatment room in Rishikesh, soft warm light",
+            "a therapist preparing herbal oils in a terracotta-walled Ayurvedic treatment room in Rishikesh, morning light through a curtained window",
+        ],
         # ── Travel Planning & Lifestyle ───────────────────────────────────────
-        "solo":         "a solo female traveller with a backpack crossing Ram Jhula bridge in Rishikesh, confident stride, Ganges below, mountains ahead, adventure awaiting",
-        "family":       "a family of four on a raft wearing brightly coloured helmets on the Ganges near Rishikesh, parents and kids laughing, water splashing, pure joy",
-        "budget":       "backpackers sharing a meal at a cheap riverside café in Rishikesh, reusable cups, colourful notebooks, map on the table, easy travel lifestyle",
-        "safety":       "a licensed rafting guide demonstrating safety gear — helmet, life jacket, paddle — to a group on the Ganges riverbank near Rishikesh before a rafting trip",
-        "cost":         "a traveller checking a printed itinerary at a café table in Rishikesh, the Ganges visible outside, a steaming cup of chai, casual planning atmosphere",
-        "price":        "street vendor selling marigold garlands and incense near Triveni Ghat, Rishikesh, colourful offerings, warm golden light, a traveller browsing",
-        "weekend":      "a group of friends at the Neer Garh waterfall near Rishikesh — splashing in the pool, laughing, surrounded by green jungle, carefree weekend adventure",
-        "itinerary":    "a bird's-eye view of central Rishikesh showing Laxman Jhula, the Ganges curve, colourful ashrams on the banks, and green Himalayan hills — editorial travel photography",
-        "guide":        "a local Rishikesh tour guide pointing toward Kunjapuri temple from a hilltop viewpoint, guests listening, misty Himalayan valley stretching below",
-        "travel":       "a traveller's backpack leaning against a stone wall near Laxman Jhula with the Ganges and green hills beyond, adventure travel photography",
-        "places":       "Rishikesh aerial view from a drone — Laxman Jhula bridge, colourful ashrams, green hills, the Ganges curving through the valley, a city of yoga and adventure",
-        "things":       "a montage-style scene from Rishikesh — a rafter in white water, a yogi at sunrise, marigolds floating on the Ganges at aarti, the Beatles Ashram murals",
-        "camping":      "glamping tents on a riverside beach near Shivpuri — canvas tents, campfire, stars reflected in still Ganges water, a truly peaceful night in the Himalayas",
+        "solo": [
+            "a solo female traveller with a backpack crossing Ram Jhula bridge in Rishikesh, confident stride, Ganges below, mountains ahead, adventure awaiting",
+            "a solo traveller sitting alone on the ghat steps in Rishikesh at sunset, backpack beside them, journal in hand, the Ganges glowing",
+            "close-up of a solo traveller checking a map on their phone at a Rishikesh street corner, backpack straps visible, market bustling behind",
+        ],
+        "family": [
+            "a family of four on a raft wearing brightly coloured helmets on the Ganges near Rishikesh, parents and kids laughing, water splashing, pure joy",
+            "a family walking together across Ram Jhula bridge in Rishikesh, kids pointing excitedly at the river below",
+            "a family sharing a thali meal at a riverside dhaba table in Rishikesh, kids laughing, the Ganges visible through the window",
+        ],
+        "budget": [
+            "backpackers sharing a meal at a cheap riverside café in Rishikesh, reusable cups, colourful notebooks, map on the table, easy travel lifestyle",
+            "close-up of a printed budget itinerary and a few rupee notes on a café table in Rishikesh, chai glass beside it",
+            "backpackers comparing notes over chai at a low-cost riverside stall in Rishikesh, the Ganges and hills visible behind them",
+        ],
+        "safety": [
+            "a licensed rafting guide demonstrating safety gear — helmet, life jacket, paddle — to a group on the Ganges riverbank near Rishikesh before a rafting trip",
+            "close-up of a rafting guide fastening a life jacket buckle on a participant at the Ganges riverbank near Rishikesh",
+            "a safety briefing circle on the riverbank near Rishikesh, guide holding a paddle demonstrating strokes, helmets lined up nearby",
+        ],
+        "cost": [
+            "a traveller checking a printed itinerary at a café table in Rishikesh, the Ganges visible outside, a steaming cup of chai, casual planning atmosphere",
+            "close-up of a traveller's notebook with handwritten budget notes on a café table in Rishikesh, chai glass beside it",
+            "two travellers comparing prices on a phone screen at a rooftop café table in Rishikesh, the Ganges glowing at dusk behind them",
+        ],
+        "price": [
+            "street vendor selling marigold garlands and incense near Triveni Ghat, Rishikesh, colourful offerings, warm golden light, a traveller browsing",
+            "close-up of marigold garlands and incense sticks displayed at a street stall near Triveni Ghat, Rishikesh, golden afternoon light",
+            "a vendor handing a marigold garland to a customer near Triveni Ghat, Rishikesh, stalls of offerings lining the street behind",
+        ],
+        "weekend": [
+            "a group of friends at the Neer Garh waterfall near Rishikesh — splashing in the pool, laughing, surrounded by green jungle, carefree weekend adventure",
+            "friends taking a group photo at the base of Neer Garh waterfall near Rishikesh, spray catching the light, everyone laughing",
+            "a group relaxing on rocks beside the pool at Neer Garh waterfall near Rishikesh, feet in the water, dense jungle all around",
+        ],
+        "itinerary": [
+            "a bird's-eye view of central Rishikesh showing Laxman Jhula, the Ganges curve, colourful ashrams on the banks, and green Himalayan hills — editorial travel photography",
+            "a traveller's open notebook itinerary on a café table with a map of Rishikesh sketched beside a chai glass",
+            "an aerial drone shot tracing the Ganges through Rishikesh at golden hour, bridges and ashrams strung along both banks",
+        ],
+        "guide": [
+            "a local Rishikesh tour guide pointing toward Kunjapuri temple from a hilltop viewpoint, guests listening, misty Himalayan valley stretching below",
+            "close-up of a local guide's hand tracing a route on a paper map in Rishikesh, travellers gathered around listening",
+            "a local guide leading a small group along a forest trail near Rishikesh, pointing out a viewpoint through the trees",
+        ],
+        "travel": [
+            "a traveller's backpack leaning against a stone wall near Laxman Jhula with the Ganges and green hills beyond, adventure travel photography",
+            "a traveller's boots and backpack resting on a ghat step in Rishikesh at sunrise, the Ganges glowing pink beyond",
+            "close-up of a well-worn travel journal and a chai glass on a stone ledge overlooking the Ganges in Rishikesh",
+        ],
+        "places": [
+            "Rishikesh aerial view from a drone — Laxman Jhula bridge, colourful ashrams, green hills, the Ganges curving through the valley, a city of yoga and adventure",
+            "a wide panoramic shot of Rishikesh from a hilltop viewpoint at sunset, bridges, ashrams, and the Ganges glowing below",
+            "a wide shot combining Laxman Jhula bridge and the Kunjapuri temple silhouette across the Rishikesh valley at dusk",
+        ],
+        "things": [
+            "a montage-style scene from Rishikesh — a rafter in white water, a yogi at sunrise, marigolds floating on the Ganges at aarti, the Beatles Ashram murals",
+            "a split-composition scene of Rishikesh — a bungee jumper mid-air, a temple bell, and a rooftop café chai glass, all in one wide frame",
+            "a panoramic dusk shot over Rishikesh capturing the Ganges, a suspension bridge, and distant Himalayan peaks in one frame",
+        ],
         # ── Defaults pool: 12 diverse non-repetitive fallback scenes ──────────
         "defaults": [
             "Laxman Jhula suspension bridge in Rishikesh at golden hour — orange-painted cables, colourful prayer flags, the Ganges emerald-green below, forested hills, warm light",
@@ -1481,8 +1794,9 @@ class BlogGeneratorOrchestrator:
     def _get_travel_scene(self, title: str, category: str = "") -> str:
         """
         Returns a photorealistic Rishikesh travel scene description for image generation.
-        Uses keyword matching; falls back to a RANDOM item from the 'defaults' pool
-        to ensure visual diversity across articles.
+        Uses keyword matching to find the right place/activity, then picks RANDOMLY among
+        that keyword's variant pool (and falls back to the 'defaults' pool if no keyword
+        matches) so that two articles on the same topic don't get the identical scene text.
         """
         search_str = f"{title} {category}".lower()
 
@@ -1496,16 +1810,15 @@ class BlogGeneratorOrchestrator:
                 best_key = key
                 best_key_len = len(key)
 
-        if best_key:
-            scene = self.RISHIKESH_TRAVEL_SCENES[best_key]
-            logger.info("Travel scene selected: key='%s' for title='%s'", best_key, title[:50])
-        else:
-            # Random pick from the diverse defaults pool
-            defaults_pool = self.RISHIKESH_TRAVEL_SCENES.get("defaults", [])
-            scene = random.choice(defaults_pool) if defaults_pool else (
-                "scenic view of Rishikesh nestled in the Himalayan foothills, sacred Ganges river, lush green landscape"
-            )
-            logger.info("Travel scene selected: key='default(random)' for title='%s'", title[:50])
+        pool = self.RISHIKESH_TRAVEL_SCENES.get(best_key) if best_key else None
+        if not pool:
+            best_key = "defaults (no keyword match)"
+            pool = self.RISHIKESH_TRAVEL_SCENES.get("defaults", [])
+
+        scene = random.choice(pool) if pool else (
+            "scenic view of Rishikesh nestled in the Himalayan foothills, sacred Ganges river, lush green landscape"
+        )
+        logger.info("Travel scene selected: key='%s' (%d variants) for title='%s'", best_key, len(pool), title[:50])
         return scene
 
     def _generate_visual_description(self, title: str, category: str = "") -> str:

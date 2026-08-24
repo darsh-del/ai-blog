@@ -32,6 +32,7 @@ from src.publishers.wordpress import WordPressPublisher
 from src.services.email_service import EmailService, _parse_email_list
 from src.services.link_sanitizer import LinkSanitizer
 from src.services.linking_manager import LinkingManager
+from src.services.orchestrator import BlogGeneratorOrchestrator
 from src.services.seo_auto_healer import SEOAutoHealer
 
 _VALID_DESC = (
@@ -593,3 +594,81 @@ def test_wordpress_publisher_success(mock_increment: MagicMock, mock_post: Magic
     result = publisher.publish_article(article)
     assert result["id"] == 123
     assert result["link"] == "https://example.com/test-slug"
+
+
+# ==============================================================================
+# 10. ORCHESTRATOR: IMAGE SCENE DIVERSITY & DUPLICATE CONTENT GUARD
+# ==============================================================================
+
+def test_travel_scene_pool_gives_varied_output_for_same_topic() -> None:
+    """Same-topic titles must not always get the exact same hero-image scene text.
+
+    Regression guard for the bug that caused every 'rafting' article (etc.) to get
+    an identical image prompt — each keyword now maps to a pool of variants.
+    """
+    orchestrator = object.__new__(BlogGeneratorOrchestrator)
+    seen = {
+        orchestrator._get_travel_scene("Best Rafting Spots Near Rishikesh")
+        for _ in range(30)
+    }
+    assert len(seen) > 1, "Expected multiple distinct scene variants for the same keyword"
+    assert all("rafting" in s.lower() or "raft" in s.lower() for s in seen)
+
+
+def test_travel_scene_unmatched_title_uses_defaults_pool() -> None:
+    orchestrator = object.__new__(BlogGeneratorOrchestrator)
+    scene = orchestrator._get_travel_scene("Totally Unrelated Title With No Keyword")
+    assert scene in orchestrator.RISHIKESH_TRAVEL_SCENES["defaults"]
+
+
+def _make_article(content_html: str = "<h1>Title</h1><p>Some body text.</p>") -> ArticleDraft:
+    meta = Metadata(
+        title="Test Article Title",
+        description=_VALID_DESC,
+        focus_keyword="keyword",
+        url_slug="test-slug",
+        canonical_url="https://example.com/test-slug",
+        keywords=["keyword"],
+        json_ld_schema={}
+    )
+    return ArticleDraft(
+        title="Test Article Title",
+        content_html=content_html,
+        word_count=200,
+        metadata=meta,
+        faq_section="<h2>FAQ</h2>"
+    )
+
+
+def test_duplicate_content_guard_flags_near_duplicate() -> None:
+    """A draft that scores above CONTENT_SIMILARITY_THRESHOLD against an already
+    -published article must be flagged so the caller retries instead of publishing it.
+    """
+    orchestrator = object.__new__(BlogGeneratorOrchestrator)
+    orchestrator.vector_store = MagicMock(client=True)
+    orchestrator.vector_store.find_similar_articles.return_value = [
+        {"relevance_score": 0.97, "title": "Existing Rafting Guide", "article_id": "1", "content_snippet": ""}
+    ]
+
+    match = orchestrator._find_near_duplicate_match(_make_article())
+    assert match is not None
+    assert match["title"] == "Existing Rafting Guide"
+
+
+def test_duplicate_content_guard_allows_dissimilar_article() -> None:
+    orchestrator = object.__new__(BlogGeneratorOrchestrator)
+    orchestrator.vector_store = MagicMock(client=True)
+    orchestrator.vector_store.find_similar_articles.return_value = [
+        {"relevance_score": 0.40, "title": "Unrelated Article", "article_id": "2", "content_snippet": ""}
+    ]
+
+    assert orchestrator._find_near_duplicate_match(_make_article()) is None
+
+
+def test_duplicate_content_guard_noop_when_vector_store_unavailable() -> None:
+    """Fails safe: no Weaviate client configured => guard never runs, never errors."""
+    orchestrator = object.__new__(BlogGeneratorOrchestrator)
+    orchestrator.vector_store = MagicMock(client=None)
+
+    assert orchestrator._find_near_duplicate_match(_make_article()) is None
+    orchestrator.vector_store.find_similar_articles.assert_not_called()

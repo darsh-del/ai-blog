@@ -727,4 +727,8 @@ class Config:
     MAX_ITERATIONS = int(os.getenv("MAX_ARTICLE_RETRIES", "3"))
     MAX_TOTAL_ARTICLES = int(os.getenv("MAX_TOTAL_ARTICLES", "50000"))
 
-
+    # Near-duplicate content guard: if a passing draft scores >= this similarity
+    # (via VectorStoreManager.find_similar_articles, 0-1 scale) against an already
+    # -published article, it's sent back through the retry loop instead of being
+    # accepted. No-op when Weaviate isn't configured (vector_store.client is None).
+    CONTENT_SIMILARITY_THRESHOLD = float(os.getenv("CONTENT_SIMILARITY_THRESHOLD", "0.93"))
