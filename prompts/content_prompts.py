@@ -11,6 +11,7 @@ from .templates import (
     REJECTION_CRITERIA,
     EXACT_OUTPUT_FORMAT,
 )
+from .writing_styles import select_writing_style
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -339,15 +340,23 @@ def _get_content_requirements(is_brand_article: bool, category: str) -> str:
     """
 
 
-def _get_human_voice_block() -> str:
+def _get_human_voice_block(title: str = "", category: str = "") -> str:
     """
     Style constraints aimed at natural sentence-rhythm variation and avoiding the
     stock vocabulary/openers that make AI-written text read as flat and uniform
     (low perplexity/burstiness). Google doesn't rank by "AI-detector score" — it
     ranks by content quality and E-E-A-T — but flat, repetitive phrasing reads
     poorly to real visitors regardless, so this is a genuine writing-quality ask.
+
+    A topic-matched entry from prompts.writing_styles is layered on top of the
+    universal rules below — every style still needs varied sentence rhythm and
+    the same banned AI-cliche vocabulary; the style block adds a genuinely
+    different personality/technique on top, so five articles on five different
+    topics don't all read like the same narrator wrote them. See writing_styles.py
+    for the full research/sourcing behind the five voices.
     """
-    return """
+    selected_style = select_writing_style(title, category)
+    return selected_style["instructions"] + """
     **WRITING VOICE — SOUND LIKE A PERSON, NOT A TEMPLATE:**
     - Vary sentence length deliberately. Do NOT write every sentence at a similar length.
       Cluster it the way people actually talk: two or three short, punchy sentences,
@@ -595,7 +604,7 @@ def create_content_prompt(
 
     {_get_revision_instruction(reference_text)}
 
-    {_get_human_voice_block()}
+    {_get_human_voice_block(title, category)}
 
     {_get_content_requirements(is_brand_article, category)}
 
