@@ -34,6 +34,7 @@ from src.services.link_sanitizer import LinkSanitizer
 from src.services.linking_manager import LinkingManager
 from src.services.orchestrator import BlogGeneratorOrchestrator
 from src.services.seo_auto_healer import SEOAutoHealer
+from prompts.writing_styles import select_writing_style, WRITING_STYLES
 
 _VALID_DESC = (
     "Explore Rishikesh rafting and bungee jumping with Bucketlistt. "
@@ -672,3 +673,26 @@ def test_duplicate_content_guard_noop_when_vector_store_unavailable() -> None:
 
     assert orchestrator._find_near_duplicate_match(_make_article()) is None
     orchestrator.vector_store.find_similar_articles.assert_not_called()
+
+
+def test_writing_style_selection_matches_topic_keyword() -> None:
+    """A topic-matched voice must be picked deterministically by keyword, not randomly,
+    so a rafting article always gets the adventure voice, a temple article the spiritual
+    one, etc. Regression guard for the "all articles read the same" complaint.
+    """
+    assert len(WRITING_STYLES) == 5
+    cases = {
+        "Best River Rafting in Rishikesh": "adventure_storyteller",
+        "Triveni Ghat Aarti: A Spiritual Evening Guide": "spiritual_observer",
+        "Rishikesh Rafting Price Comparison 2026": "practical_planner",
+        "Is Bungee Jumping Safe for Beginners?": "skeptical_first_timer",
+    }
+    for title, expected_key in cases.items():
+        selected = select_writing_style(title, "")
+        assert selected is WRITING_STYLES[expected_key], f"'{title}' picked the wrong voice"
+
+
+def test_writing_style_selection_falls_back_to_random_pool() -> None:
+    """An unmatched title must still get SOME real style, not crash or return None."""
+    selected = select_writing_style("Totally Unrelated Xyz With No Keyword Match", "")
+    assert selected in WRITING_STYLES.values()
