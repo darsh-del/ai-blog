@@ -25,7 +25,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from src.agents import ContentGeneratorAgent, SlugRegistry, TitleManager
-from src.concurrent_manager import ConcurrentCampaignManager
+from src.concurrent_manager import ConcurrentCampaignManager, _count_existing_articles_by_category
 from src.config import Config
 from src.models import ArticleDraft, InternalLink, LLMConfig, Metadata, SEOMetric, SEOReport
 from src.publishers.wordpress import WordPressPublisher
@@ -696,6 +696,30 @@ def test_writing_style_selection_falls_back_to_random_pool() -> None:
     """An unmatched title must still get SOME real style, not crash or return None."""
     selected = select_writing_style("Totally Unrelated Xyz With No Keyword Match", "")
     assert selected in WRITING_STYLES.values()
+
+
+def test_category_usage_counter_reads_real_history(tmp_path, monkeypatch) -> None:
+    """Root-cause fix for '5 of my last 10 articles were the same topic': the
+    category-rotation overuse guard used to start every campaign run at zero,
+    with no memory of which categories were already heavily published. This
+    counts real existing output so the guard can seed itself with actual
+    history instead of pretending every category starts equally fresh.
+    """
+    json_dir = tmp_path / "json"
+    json_dir.mkdir()
+    (json_dir / "a.json").write_text(json.dumps({"category": "How to Reach Rishikesh"}))
+    (json_dir / "b.json").write_text(json.dumps({"category": "How to Reach Rishikesh"}))
+    (json_dir / "c.json").write_text(json.dumps({"category": "River Rafting in Rishikesh"}))
+    (json_dir / "d.json").write_text("not valid json{{{")  # must not crash the scan
+    (json_dir / "e.json").write_text(json.dumps({"category": ""}))  # no category, ignored
+
+    monkeypatch.setattr(Config, "JSON_OUTPUT_DIR", str(json_dir))
+
+    counts = _count_existing_articles_by_category()
+    assert counts == {
+        "How to Reach Rishikesh": 2,
+        "River Rafting in Rishikesh": 1,
+    }
 
 
 def test_seo_healer_strips_generic_conclusion_closer() -> None:
