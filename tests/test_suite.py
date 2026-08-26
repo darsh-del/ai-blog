@@ -696,3 +696,20 @@ def test_writing_style_selection_falls_back_to_random_pool() -> None:
     """An unmatched title must still get SOME real style, not crash or return None."""
     selected = select_writing_style("Totally Unrelated Xyz With No Keyword Match", "")
     assert selected in WRITING_STYLES.values()
+
+
+def test_seo_healer_strips_generic_conclusion_closer() -> None:
+    """The prompt-level ban on the "rare destinations..." closer was verified NOT
+    reliable on its own (it reappeared verbatim in a live generated article despite
+    being banned by name) — this deterministic strip in SEOAutoHealer is the actual
+    guarantee. Uses the two real wordings observed in production output.
+    """
+    for wording in ("promise", "reputation"):
+        html = (
+            f"<p>Rishikesh is one of those rare destinations that genuinely delivers "
+            f"on its {wording}—whether you come for the adrenaline, the spirituality, "
+            f"or simply to sit by the Ganga and think. This guide covered X, Y, Z.</p>"
+        )
+        result = SEOAutoHealer._strip_generic_closer(html)
+        assert "rare destinations" not in result.lower()
+        assert "This guide covered X, Y, Z." in result, "must not delete the rest of the paragraph"
