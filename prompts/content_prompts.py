@@ -102,6 +102,15 @@ def _get_conclusion_cta_block(is_brand_article: bool, bucketlistt_cta_url: str) 
     - NEVER end with more than ONE contextual link. One is plenty.
     - NEVER end mid-sentence, with an emoji, with a stray backtick, or with a code fence.
       The final character of the article must be a period inside a </p>.
+    - NEVER end with a generic sentimental "Rishikesh is one of those rare destinations
+      that genuinely delivers on its promise/reputation — whether you come for the
+      adrenaline, the spirituality, or simply to sit by the Ganga and think" style closer,
+      or any close paraphrase of that shape. This exact sentence has shown up verbatim
+      across unrelated articles because it's the model's safest generic default — it is
+      now BANNED specifically, word-for-word and in paraphrase.
+      The final sentence must instead reference something CONCRETE from THIS article's
+      own body (the specific activity, price, route, or place actually discussed above),
+      not a generic ode to Rishikesh as a destination that could paste onto any article.
     """
     if is_brand_article:
         return f"""
