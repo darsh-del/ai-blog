@@ -52,7 +52,7 @@ class SEOAutoHealer:
             target_keywords,
             article_type
         )
-        article.content_html = healed_html
+        article.content_html = cls._strip_generic_closer(healed_html)
         article.faq_section = healed_faq
 
         # 3. Heal Internal Links
@@ -95,6 +95,29 @@ class SEOAutoHealer:
         # Ensure focus keyword is set
         if not metadata.focus_keyword and keywords:
             metadata.focus_keyword = keywords[0]
+
+    # Matches the model's default generic conclusion closer regardless of small
+    # wording drift ("promise" vs "reputation", em-dash vs hyphen). The prompt
+    # already bans this sentence by name (see prompts/content_prompts.py
+    # _get_conclusion_cta_block) — that ban alone was verified NOT reliable
+    # (it reappeared verbatim in a live generated article after being banned),
+    # because it's competing with a much longer, denser prompt and this is a
+    # strong model default. A deterministic strip here is the actual guarantee.
+    _GENERIC_CLOSER_PATTERN = re.compile(
+        r"Rishikesh is one of those rare destinations that genuinely delivers "
+        r"on its (?:promise|reputation)[—-][^.]*\.\s*",
+        re.IGNORECASE
+    )
+
+    @classmethod
+    def _strip_generic_closer(cls, html: str) -> str:
+        """Removes the recurring generic "rare destinations..." closer sentence
+        if the model wrote it despite the prompt-level ban. Leaves the rest of
+        the closing paragraph (the keyword recap sentence, the bucketlistt link)
+        untouched — this sentence is always a self-contained lead-in, never load
+        -bearing for the paragraph's grammar.
+        """
+        return cls._GENERIC_CLOSER_PATTERN.sub("", html)
 
     @classmethod
     def _heal_content_and_faq(
