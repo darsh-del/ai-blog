@@ -21,6 +21,38 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
+
+def _count_existing_articles_by_category() -> dict:
+    """Counts already-published articles per category by scanning the JSON output
+    directory (articles.csv has no category column, so this is the only source
+    of truth). Used to seed the campaign's overuse guard with REAL history —
+    without this, every run started the guard at zero, so a category that
+    already has a dozen articles looked exactly as "fresh" as one with none,
+    and the rotation (reshuffled from scratch every run, no memory between
+    runs) could freely keep piling onto whichever category was already most
+    covered. Root cause of "5 of my last 10 articles were the same topic."
+    """
+    counts: dict = {}
+    try:
+        json_dir = Config.JSON_OUTPUT_DIR
+        if not os.path.isdir(json_dir):
+            return counts
+        for filename in os.listdir(json_dir):
+            if not filename.endswith(".json"):
+                continue
+            try:
+                with open(os.path.join(json_dir, filename), "r", encoding="utf-8") as file_handle:
+                    category = (json.load(file_handle).get("category") or "").strip()
+            except (OSError, ValueError) as error:
+                logger.debug("Skipping unreadable article file %s: %s", filename, error)
+                continue
+            if category:
+                counts[category] = counts.get(category, 0) + 1
+    except OSError as error:
+        logger.warning("Could not scan JSON output dir for category counts: %s", error)
+    return counts
+
+
 class ConcurrentCampaignManager:
     """Orchestrates a concurrent article generation campaign."""
 
@@ -195,7 +227,15 @@ class ConcurrentCampaignManager:
         # the same topic, this let one category dominate a whole campaign run.
         # Track usage counts and refuse a seed's category once it's notably
         # more used than average, falling back to the fair rotation instead.
-        category_usage_counts = {}
+        #
+        # Seeded with REAL historical counts (not starting at zero every run) —
+        # and now also applied to the plain rotation picks below, not just
+        # scraped-seed categories. Previously the rotation's own shuffle-and
+        # -pop was "fair" only within a single run and only among the 5
+        # categories equally; it had no idea 3 of them already had 10+
+        # published articles each and one had almost none, so it happily kept
+        # feeding the already-saturated ones at the same rate as everyone else.
+        category_usage_counts = _count_existing_articles_by_category()
         CATEGORY_OVERUSE_RATIO = 1.5
 
         def _record_category_use(cat):
@@ -209,8 +249,26 @@ class ConcurrentCampaignManager:
             avg = total_used / len(category_usage_counts)
             return category_usage_counts.get(cat, 0) >= max(3, avg * CATEGORY_OVERUSE_RATIO)
 
+        def _pop_next_category(rotation, config_categories, fallback_type):
+            """Pops the next category off a rotation list, refilling/reshuffling
+            when empty exactly like before — but now skips a category that's
+            already overused (real historical count + this run) in favour of
+            the next one in the shuffled order, instead of handing it out
+            regardless. Bounded by the rotation's own length so this can never
+            loop forever; if literally every category is equally saturated,
+            the first draw is accepted rather than refusing to produce anything.
+            """
+            if not rotation:
+                rotation.extend(list(config_categories) or [Config.get_random_category(fallback_type)])
+                random.shuffle(rotation)
+            for _ in range(len(rotation)):
+                candidate = rotation.pop(0)
+                if not _is_category_overused(candidate):
+                    return candidate
+                rotation.append(candidate)  # put it back at the end, try the next one
+            return rotation.pop(0)  # every category is equally saturated — just take one
+
         def get_next_job_params(article_type: str) -> dict:
-            nonlocal industry_rotation, service_category_rotation
             seed_info = {
                 "title": "",
                 "keywords": None,
@@ -227,10 +285,9 @@ class ConcurrentCampaignManager:
                 if scraped_cat and not _is_category_overused(scraped_cat):
                     seed_info["category"] = scraped_cat
                 else:
-                    if not industry_rotation:
-                        industry_rotation = list(Config.INDUSTRY_CATEGORIES) or [Config.get_random_category("generic")]
-                        random.shuffle(industry_rotation)
-                    seed_info["category"] = industry_rotation.pop(0)
+                    seed_info["category"] = _pop_next_category(
+                        industry_rotation, Config.INDUSTRY_CATEGORIES, "generic"
+                    )
 
                 # Also use keywords from the seed if available
                 kws = obj.get("keywords")
@@ -242,16 +299,14 @@ class ConcurrentCampaignManager:
                     seeds["pool"] = list(seeds["articles"])
                     random.shuffle(seeds["pool"])
             elif article_type == "generic":
-                if not industry_rotation:
-                    industry_rotation = list(Config.INDUSTRY_CATEGORIES) or [Config.get_random_category("generic")]
-                    random.shuffle(industry_rotation)
-                seed_info["category"] = industry_rotation.pop(0)
+                seed_info["category"] = _pop_next_category(
+                    industry_rotation, Config.INDUSTRY_CATEGORIES, "generic"
+                )
             else:
                 # For Brand-specific, use the product category rotation
-                if not service_category_rotation:
-                    service_category_rotation = list(Config.PRODUCT_CATEGORIES) or [Config.get_random_category("brand")]
-                    random.shuffle(service_category_rotation)
-                seed_info["category"] = service_category_rotation.pop(0)
+                seed_info["category"] = _pop_next_category(
+                    service_category_rotation, Config.PRODUCT_CATEGORIES, "brand"
+                )
 
             _record_category_use(seed_info["category"])
             return seed_info
