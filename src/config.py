@@ -296,7 +296,22 @@ class PremiumKeywords(dict):
             "things_to_do_in_rishikesh": "things_to_do_rishikesh",
             "ganga_aarti_in_rishikesh": "spiritual_cultural",
             "best_hotels_and_hostels_in_rishikesh": "best_hotels_and_hostels",
-            "how_to_reach_rishikesh": "how_to_reach"
+            "how_to_reach_rishikesh": "how_to_reach",
+            # Added when expanding from 5 to 14 categories (root-cause fix for
+            # campaigns exhausting all 5 topics and producing zero articles).
+            # Each maps to a REAL, substantial cluster already sitting in
+            # keywords.json — unlike the 5 categories above, these route
+            # straight to super().get(mapped_key) below (no hardcoded
+            # 8-12 word override), so they get that cluster's full keyword set.
+            "bungee_jumping_in_rishikesh": "bungee_jumping",
+            "paragliding_in_rishikesh": "paragliding",
+            "zipline_in_rishikesh": "flying_fox_zipline",
+            "camping_in_rishikesh": "camping",
+            "trekking_and_hiking_in_rishikesh": "trekking_hiking",
+            "kayaking_and_water_sports_in_rishikesh": "kayaking_water_sports",
+            "places_to_visit_in_rishikesh": "places_to_visit_rishikesh",
+            "best_cafes_and_restaurants_in_rishikesh": "restaurants_cafes_rishikesh",
+            "solo_travel_in_rishikesh": "solo_travel_rishikesh",
         }
 
     def get(self, key, default=None):
