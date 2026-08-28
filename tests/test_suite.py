@@ -698,6 +698,31 @@ def test_writing_style_selection_falls_back_to_random_pool() -> None:
     assert selected in WRITING_STYLES.values()
 
 
+def test_expanded_categories_all_resolve_to_real_keywords() -> None:
+    """Root-cause fix for a full campaign producing ZERO articles: only 5 topic
+    categories existed, and once every one was saturated there was nowhere left
+    to go. Expanded to 14 — each new category must actually resolve (via
+    PremiumKeywords.aliases in src/config.py) to a real, substantial cluster
+    from data/config/keywords.json, not silently fall through to nothing.
+    """
+    new_categories = [
+        "Bungee Jumping in Rishikesh", "Paragliding in Rishikesh", "Zipline in Rishikesh",
+        "Camping in Rishikesh", "Trekking and Hiking in Rishikesh",
+        "Kayaking and Water Sports in Rishikesh", "Places to Visit in Rishikesh",
+        "Best Cafes and Restaurants in Rishikesh", "Solo Travel in Rishikesh",
+    ]
+    assert set(new_categories).issubset(set(Config.INDUSTRY_CATEGORIES))
+    assert set(new_categories).issubset(set(Config.PRODUCT_CATEGORIES))
+
+    for category in new_categories:
+        cluster = Config.KEYWORDS_ALL.get(category)
+        assert isinstance(cluster, dict), f"'{category}' did not resolve to a real cluster"
+        keyword_count = sum(
+            len(v) for v in cluster.values() if isinstance(v, list)
+        )
+        assert keyword_count >= 5, f"'{category}' resolved to a near-empty cluster ({keyword_count} keywords)"
+
+
 def test_category_usage_counter_reads_real_history(tmp_path, monkeypatch) -> None:
     """Root-cause fix for '5 of my last 10 articles were the same topic': the
     category-rotation overuse guard used to start every campaign run at zero,
