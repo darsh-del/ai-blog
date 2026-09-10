@@ -23,8 +23,115 @@ from src.publishers.wordpress import WordPressPublisher
 from src.stats_manager import StatsManager
 from utils.utils import CSVManager, VectorStoreManager
 from .internal_linking import InternalLinkingService
+from .image_dedup import ImageDedupGuard
 
 logger = logging.getLogger(__name__)
+
+
+def _build_prompt_styles(
+    article_type: str, visual_description: str, angles: str, lighting: str, lens: str, no_text: str
+) -> list:
+    """The pool of photography-style prompt templates for hero image generation,
+    split out to a module-level function so it can be redrawn fresh on every
+    near-duplicate retry (see BlogGeneratorOrchestrator.save_artifacts) instead
+    of only ever being built once per article."""
+    if article_type == "brand":
+        return [
+            {
+                "name": "Cinematic Adventure Travel",
+                "prompt": (
+                    f"Cinematic adventure travel photograph in Rishikesh, India: "
+                    f"{visual_description}. {angles}, {lighting}, {lens}. "
+                    f"Style: National Geographic adventure photography. "
+                    f"Colours: lush Himalayan greens, turquoise Ganges, warm earth tones. "
+                    f"{no_text} Ultra-sharp high resolution."
+                )
+            },
+            {
+                "name": "Immersive First-Person POV",
+                "prompt": (
+                    f"First-person immersive travel photograph in Rishikesh, India: "
+                    f"{visual_description}. Point-of-view angle as if the viewer is there. "
+                    f"{lighting}. Wide-angle action shot, authentic and unposed. "
+                    f"{no_text} Photorealistic, vivid colours."
+                )
+            },
+            {
+                "name": "Premium Lifestyle Magazine",
+                "prompt": (
+                    f"Premium travel lifestyle photograph for a luxury adventure magazine, Rishikesh India: "
+                    f"{visual_description}. {lens}, {lighting}, rule-of-thirds composition. "
+                    f"Style: Conde Nast Traveller editorial spread. "
+                    f"{no_text} Clean, minimal, breathtaking."
+                )
+            },
+            {
+                "name": "Documentary Authentic Moment",
+                "prompt": (
+                    f"Documentary-style authentic travel photograph, Rishikesh India: "
+                    f"{visual_description}. Natural candid moment, unposed. "
+                    f"{angles}, {lighting}. Slight film grain, {lens}. "
+                    f"Style: travel documentary still frame. {no_text}"
+                )
+            },
+        ]
+    return [
+        {
+            "name": "Editorial Travel Documentary",
+            "prompt": (
+                f"Editorial travel documentary photograph, Rishikesh India: "
+                f"{visual_description}. {angles}, {lighting}, {lens}. "
+                f"Style: travel journalism, authentic real location, natural light. "
+                f"{no_text} Photorealistic, high resolution."
+            )
+        },
+        {
+            "name": "Atmospheric Landscape Photography",
+            "prompt": (
+                f"Atmospheric landscape photography, Rishikesh, India: "
+                f"{visual_description}. {lighting}, {lens}. "
+                f"Wide composition with strong foreground element and layered depth. "
+                f"Style: landscape fine-art photography. {no_text}"
+            )
+        },
+        {
+            "name": "Candid Destination Photography",
+            "prompt": (
+                f"Candid destination travel photograph, Rishikesh, India: "
+                f"{visual_description}. Unposed, natural moment. "
+                f"35mm street photography style, {lighting}, slight bokeh background. "
+                f"{no_text} Rich warm colours, photorealistic."
+            )
+        },
+        {
+            "name": "Dramatic Aerial Landscape",
+            "prompt": (
+                f"Dramatic aerial travel photograph, Rishikesh, India: "
+                f"{visual_description}. Drone overhead shot, {lighting}. "
+                f"Sweeping panoramic composition showing scale of the Himalayan landscape. "
+                f"Style: aerial travel photography, vivid saturation. {no_text}"
+            )
+        },
+        {
+            "name": "Intimate Close-Up Detail",
+            "prompt": (
+                f"Intimate close-up detail travel photograph, Rishikesh, India: "
+                f"{visual_description}. 85mm portrait lens, very shallow depth of field. "
+                f"Focus on texture, detail, and connection with the environment. "
+                f"{lighting}. {no_text} Photorealistic."
+            )
+        },
+        {
+            "name": "Golden Hour Silhouette",
+            "prompt": (
+                f"Dramatic golden-hour silhouette travel photograph, Rishikesh, India: "
+                f"{visual_description}. Strong backlit silhouette against a vivid sunset sky. "
+                f"Warm amber and deep orange tones, Himalayan horizon. "
+                f"Minimal, powerful composition. {no_text} High resolution."
+            )
+        },
+    ]
+
 
 class BlogGeneratorOrchestrator:
     def __init__(self):
@@ -947,152 +1054,118 @@ class BlogGeneratorOrchestrator:
                 clean_title = clean_title.replace('...', ' ').replace('..', ' ').replace('*', '')
                 clean_title = " ".join(clean_title.split()).strip()
 
-                # Get deterministic Rishikesh travel scene (no LLM call needed)
-                visual_description = self._generate_visual_description(
-                    clean_title,
-                    category=parent_category
-                )
-                # Stash it so it survives outside this if-block for alt-text generation below
-                img_ctx["visual_description"] = visual_description
+                def _draw_candidate_prompt() -> Tuple[str, str, str]:
+                    """Draws one fresh candidate (scene + angle/lighting/lens +
+                    style), all re-randomized. Pulled out as its own function so
+                    the near-duplicate retry loop below can call it again for a
+                    genuinely different candidate — not just re-roll the same
+                    request and hope for a different random outcome — rather
+                    than reusing the first draw's scene text on every retry.
+                    Returns (prompt_text, style_name, visual_description).
+                    """
+                    # Get deterministic Rishikesh travel scene (no LLM call needed)
+                    visual_description = self._generate_visual_description(
+                        clean_title,
+                        category=parent_category
+                    )
+
+                    # ── Photography style pools (diverse angle / lens / lighting) ──
+                    # Each draw picks random modifiers so the image model receives
+                    # varied compositional instructions, reducing repetitive outputs.
+                    _angles = random.choice([
+                        "low-angle shot looking up",
+                        "wide-angle establishing shot",
+                        "eye-level candid perspective",
+                        "bird's-eye overhead view",
+                        "dramatic side-angle silhouette",
+                        "close-up foreground with blurred Himalayan background",
+                    ])
+                    _lighting = random.choice([
+                        "warm golden-hour sunlight",
+                        "soft blue-hour twilight",
+                        "crisp midday sun with deep shadows",
+                        "misty overcast diffused light",
+                        "dramatic sunrise backlight with lens flare",
+                        "cool early-morning mist rising from the river",
+                    ])
+                    _lens = random.choice([
+                        "shot on a 24mm wide-angle lens",
+                        "shot on a 35mm prime lens with natural depth",
+                        "shot on an 85mm portrait lens with shallow bokeh",
+                        "shot on a 14mm ultra-wide for dramatic perspective",
+                        "aerial drone photography top-down view",
+                        "shot on a 50mm standard lens, documentary feel",
+                    ])
+                    _no_text = (
+                        "CRITICAL: completely text-free image — no signs, no watermarks, "
+                        "no overlays, no typography, no logos anywhere in the frame. Pure visual scene only. "
+                        "Avoid defaulting to a generic 'lone figure silhouetted against the sunset' composition "
+                        "— choose a specific, distinct moment instead."
+                    )
+
+                    prompt_styles = _build_prompt_styles(
+                        article_type, visual_description, _angles, _lighting, _lens, _no_text
+                    )
+                    selected_style = random.choice(prompt_styles)
+                    return selected_style["prompt"], selected_style["name"], visual_description
+
+                image_prompt, style_name, visual_description = _draw_candidate_prompt()
                 logger.info("Travel scene for image: %s", visual_description[:80])
+                logger.info("Selected Image Generation Style: %s", style_name)
 
-                # ── Photography style pools (diverse angle / lens / lighting) ──
-                # Each run draws random modifiers so Imagen 3 receives varied
-                # compositional instructions, eliminating repetitive outputs.
-                _angles = random.choice([
-                    "low-angle shot looking up",
-                    "wide-angle establishing shot",
-                    "eye-level candid perspective",
-                    "bird's-eye overhead view",
-                    "dramatic side-angle silhouette",
-                    "close-up foreground with blurred Himalayan background",
-                ])
-                _lighting = random.choice([
-                    "warm golden-hour sunlight",
-                    "soft blue-hour twilight",
-                    "crisp midday sun with deep shadows",
-                    "misty overcast diffused light",
-                    "dramatic sunrise backlight with lens flare",
-                    "cool early-morning mist rising from the river",
-                ])
-                _lens = random.choice([
-                    "shot on a 24mm wide-angle lens",
-                    "shot on a 35mm prime lens with natural depth",
-                    "shot on an 85mm portrait lens with shallow bokeh",
-                    "shot on a 14mm ultra-wide for dramatic perspective",
-                    "aerial drone photography top-down view",
-                    "shot on a 50mm standard lens, documentary feel",
-                ])
-                _no_text = (
-                    "CRITICAL: completely text-free image — no signs, no watermarks, "
-                    "no overlays, no typography, no logos anywhere in the frame. Pure visual scene only."
-                )
-
-                if article_type == "brand":
-                    prompt_styles = [
-                        {
-                            "name": "Cinematic Adventure Travel",
-                            "prompt": (
-                                f"Cinematic adventure travel photograph in Rishikesh, India: "
-                                f"{visual_description}. {_angles}, {_lighting}, {_lens}. "
-                                f"Style: National Geographic adventure photography. "
-                                f"Colours: lush Himalayan greens, turquoise Ganges, warm earth tones. "
-                                f"{_no_text} Ultra-sharp high resolution."
-                            )
-                        },
-                        {
-                            "name": "Immersive First-Person POV",
-                            "prompt": (
-                                f"First-person immersive travel photograph in Rishikesh, India: "
-                                f"{visual_description}. Point-of-view angle as if the viewer is there. "
-                                f"{_lighting}. Wide-angle action shot, authentic and unposed. "
-                                f"{_no_text} Photorealistic, vivid colours."
-                            )
-                        },
-                        {
-                            "name": "Premium Lifestyle Magazine",
-                            "prompt": (
-                                f"Premium travel lifestyle photograph for a luxury adventure magazine, Rishikesh India: "
-                                f"{visual_description}. {_lens}, {_lighting}, rule-of-thirds composition. "
-                                f"Style: Conde Nast Traveller editorial spread. "
-                                f"{_no_text} Clean, minimal, breathtaking."
-                            )
-                        },
-                        {
-                            "name": "Documentary Authentic Moment",
-                            "prompt": (
-                                f"Documentary-style authentic travel photograph, Rishikesh India: "
-                                f"{visual_description}. Natural candid moment, unposed. "
-                                f"{_angles}, {_lighting}. Slight film grain, {_lens}. "
-                                f"Style: travel documentary still frame. {_no_text}"
-                            )
-                        },
-                    ]
-                else:
-                    prompt_styles = [
-                        {
-                            "name": "Editorial Travel Documentary",
-                            "prompt": (
-                                f"Editorial travel documentary photograph, Rishikesh India: "
-                                f"{visual_description}. {_angles}, {_lighting}, {_lens}. "
-                                f"Style: travel journalism, authentic real location, natural light. "
-                                f"{_no_text} Photorealistic, high resolution."
-                            )
-                        },
-                        {
-                            "name": "Atmospheric Landscape Photography",
-                            "prompt": (
-                                f"Atmospheric landscape photography, Rishikesh, India: "
-                                f"{visual_description}. {_lighting}, {_lens}. "
-                                f"Wide composition with strong foreground element and layered depth. "
-                                f"Style: landscape fine-art photography. {_no_text}"
-                            )
-                        },
-                        {
-                            "name": "Candid Destination Photography",
-                            "prompt": (
-                                f"Candid destination travel photograph, Rishikesh, India: "
-                                f"{visual_description}. Unposed, natural moment. "
-                                f"35mm street photography style, {_lighting}, slight bokeh background. "
-                                f"{_no_text} Rich warm colours, photorealistic."
-                            )
-                        },
-                        {
-                            "name": "Dramatic Aerial Landscape",
-                            "prompt": (
-                                f"Dramatic aerial travel photograph, Rishikesh, India: "
-                                f"{visual_description}. Drone overhead shot, {_lighting}. "
-                                f"Sweeping panoramic composition showing scale of the Himalayan landscape. "
-                                f"Style: aerial travel photography, vivid saturation. {_no_text}"
-                            )
-                        },
-                        {
-                            "name": "Intimate Close-Up Detail",
-                            "prompt": (
-                                f"Intimate close-up detail travel photograph, Rishikesh, India: "
-                                f"{visual_description}. 85mm portrait lens, very shallow depth of field. "
-                                f"Focus on texture, detail, and connection with the environment. "
-                                f"{_lighting}. {_no_text} Photorealistic."
-                            )
-                        },
-                        {
-                            "name": "Golden Hour Silhouette",
-                            "prompt": (
-                                f"Dramatic golden-hour silhouette travel photograph, Rishikesh, India: "
-                                f"{visual_description}. Strong backlit silhouette against a vivid sunset sky. "
-                                f"Warm amber and deep orange tones, Himalayan horizon. "
-                                f"Minimal, powerful composition. {_no_text} High resolution."
-                            )
-                        },
-                    ]
-
-                selected_style = random.choice(prompt_styles)
-                logger.info("Selected Image Generation Style: %s", selected_style['name'])
-
-                image_bytes, image_cost = generate_blog_image(selected_style["prompt"])
-
-                # Update article cost with image generation cost
+                image_bytes, image_cost = generate_blog_image(image_prompt)
                 article.cost += image_cost
+
+                # ── Near-duplicate guard ────────────────────────────────────
+                # Fingerprint the image and compare against recently generated
+                # ones (see src/services/image_dedup.py). If it looks like a
+                # near-repeat, redraw a genuinely fresh candidate (new scene AND
+                # new style, not just a re-roll) and try again — bounded, so a
+                # persistently similar topic can never block the pipeline.
+                image_hash = ImageDedupGuard.compute_hash(image_bytes) if image_bytes else None
+                dedup_retries = 0
+                if image_hash is not None:
+                    match = ImageDedupGuard.find_closest_match(image_hash)
+                    while (
+                        match and match["distance"] <= Config.IMAGE_SIMILARITY_THRESHOLD
+                        and dedup_retries < Config.IMAGE_DEDUP_MAX_RETRIES
+                    ):
+                        dedup_retries += 1
+                        logger.warning(
+                            "[IMAGE_DEDUP] New image looks like a near-duplicate of '%s' "
+                            "(Hamming distance %d/%d, threshold %d) — regenerating with a fresh "
+                            "scene and style (attempt %d/%d)...",
+                            match.get("title", "?"), match["distance"], ImageDedupGuard.HASH_SIZE ** 2,
+                            Config.IMAGE_SIMILARITY_THRESHOLD, dedup_retries, Config.IMAGE_DEDUP_MAX_RETRIES
+                        )
+                        image_prompt, style_name, visual_description = _draw_candidate_prompt()
+                        logger.info("[IMAGE_DEDUP] Retry scene: %s", visual_description[:80])
+                        logger.info("[IMAGE_DEDUP] Retry style: %s", style_name)
+                        retry_bytes, retry_cost = generate_blog_image(image_prompt)
+                        article.cost += retry_cost
+                        if not retry_bytes:
+                            logger.warning("[IMAGE_DEDUP] Retry generation failed — keeping previous image.")
+                            break
+                        image_bytes = retry_bytes
+                        image_hash = ImageDedupGuard.compute_hash(image_bytes)
+                        match = ImageDedupGuard.find_closest_match(image_hash)
+
+                    if match and match["distance"] <= Config.IMAGE_SIMILARITY_THRESHOLD:
+                        logger.warning(
+                            "[IMAGE_DEDUP] Still similar to '%s' after %d retries (distance %d) — "
+                            "accepting anyway rather than blocking the article.",
+                            match.get("title", "?"), dedup_retries, match["distance"]
+                        )
+                    else:
+                        logger.info(
+                            "[IMAGE_DEDUP] Image is sufficiently distinct (closest match distance: %s/%s).",
+                            match["distance"] if match else "n/a (no history yet)", ImageDedupGuard.HASH_SIZE ** 2
+                        )
+                    ImageDedupGuard.record(image_hash, article.title)
+
+                # Keep alt-text generation below in sync with whichever candidate
+                # (initial or a dedup retry) was actually accepted.
+                img_ctx["visual_description"] = visual_description
 
                 if image_bytes:
                     image_filename = f"{img_ctx['safe_filename']}.jpg"
@@ -1452,7 +1525,9 @@ class BlogGeneratorOrchestrator:
         "bungee": [
             "thrill-seeker frozen mid-fall from the 83-metre bungee platform at Mohan Chatti cliff above the Ganges gorge, Rishikesh, arms spread wide, turquoise river far below, dramatic action photography",
             "close-up of a jumper's face mid-scream at the moment of release from the 83-metre platform at Mohan Chatti, Rishikesh, cliff edge and gorge visible behind, high-speed action photography",
-            "wide shot of the Mohan Chatti bungee tower at Rishikesh silhouetted against the sky, a jumper mid-fall as a tiny figure against the vast Ganges gorge, epic scale",
+            "a jumper standing at the very edge of the Mohan Chatti platform near Rishikesh, guide double-checking the ankle harness, gorge dropping away below, anticipation just before the leap",
+            "friends and spectators on the Mohan Chatti viewing deck cheering and filming on their phones as a jumper leaps, cliff walls and gorge in the background",
+            "close-up detail of the ankle harness and carabiner buckle being clipped in on the Mohan Chatti platform near Rishikesh, gorge visible far below through the gap",
         ],
         "bungy": [
             "bungee jumper silhouetted against the bright blue Himalayan sky at the Rishikesh bungee jump point, Ganges river gorge below, sheer cliff walls",
@@ -1473,6 +1548,8 @@ class BlogGeneratorOrchestrator:
             "white-water rafters in bright helmets and life jackets plunging through grade-IV rapids on the Ganges between Shivpuri and Rishikesh, water spraying, raw adventure energy",
             "a rafting guide shouting paddle commands as the boat crests a rapid on the Ganges near Shivpuri, spray catching the sunlight, teammates paddling hard",
             "a raft angled sideways through a rapid on the Ganges near Rishikesh, rafters gripping the safety line, whitewater exploding around the boat",
+            "a rafting guide demonstrating paddle technique to a group standing on the riverbank beach near Shivpuri before launch, rafts lined up on the sand, calm pre-trip briefing moment",
+            "a rafting crew high-fiving and cheering on their raft in calm water after the rapids, sunlit Ganges near Rishikesh, wide grins and dripping paddles raised",
         ],
         "river": [
             "kayakers paddling in a single-file line on the calm upper stretch of the Ganges near Marine Drive, Rishikesh, rocky jungle banks, morning mist",
@@ -1483,11 +1560,15 @@ class BlogGeneratorOrchestrator:
             "tandem paraglider launching from a hilltop take-off ramp near Rishikesh, passenger and pilot soaring above a patchwork of green jungle and terracotta rooftops, Himalayan peaks on the horizon",
             "a paraglider canopy fully inflated overhead moments before takeoff on a hilltop ramp near Rishikesh, pilot and passenger braced to run",
             "aerial point-of-view from a paraglider soaring over Rishikesh — the Ganges winding below, terracotta rooftops, green jungle patchwork, Himalayan peaks in the distance",
+            "a tandem paraglider touching down on a grassy landing field near Rishikesh, canopy collapsing behind pilot and passenger, both grinning after the flight",
+            "looking up from the ground at several colourful paraglider canopies soaring together above the Rishikesh valley, green hills and river below",
         ],
         "camping": [
             "luxury tented campsite on a sandy beach beside the Ganges near Shivpuri, Rishikesh — glowing canvas tents, a bonfire reflected in still water, a star-filled Himalayan night sky",
             "glamping tents on a riverside beach near Shivpuri, Rishikesh, lit by string lights at dusk, campers gathered around a crackling bonfire",
             "morning at a riverside campsite near Shivpuri, Rishikesh — canvas tents catching the first sunlight, mist over the Ganges, a kettle steaming over embers",
+            "a group of campers seated around a bonfire dinner on the riverside beach near Shivpuri, plates of food, laughter and conversation, string lights strung between tents",
+            "interior of a cosy glamping tent near Shivpuri, Rishikesh — a made-up bed, a warm lantern glow, the Ganges just visible through the open tent flap",
         ],
         "cycling": [
             "mountain bikers descending a red-dirt forest track through dense Sal trees in the Rajaji National Park buffer zone near Rishikesh, dappled morning light",
@@ -1501,8 +1582,10 @@ class BlogGeneratorOrchestrator:
         ],
         "zipline": [
             "zipline rider soaring over a deep jungle ravine on the 800-metre flying fox cable above the Ganges river near Rishikesh, bird's-eye view of the canopy below",
-            "a zipline rider's silhouette against the sky mid-flight on the 800-metre cable above the Ganges near Rishikesh, jungle canopy far below",
-            "the zipline launch platform above a jungle ravine near Rishikesh, a rider clipped in and ready, the Ganges river visible far below through the trees",
+            "the zipline launch platform above a jungle ravine near Rishikesh, a guide checking a rider's harness clip before send-off, the Ganges river visible far below through the trees",
+            "close-up detail of a zipline rider's gloved hands gripping the trolley handle and carabiner on the cable, helmet strap visible, jungle blurred in the background",
+            "a zipline rider arriving at the landing platform near Rishikesh, guide catching and unclipping them, big smile, cheering friends waiting on the deck",
+            "aerial drone view of the full 800-metre zipline cable stretching across the jungle ravine near Rishikesh, a single rider a tiny dot mid-crossing, showing the scale of the valley",
         ],
         "cliff": [
             "Jumpin Heights bungee platform jutting over a sheer cliff edge above the turquoise Ganges gorge, green mountains beyond, golden afternoon light",

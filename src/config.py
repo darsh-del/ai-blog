@@ -434,6 +434,25 @@ class Config:
     ENABLE_AUTHOR_BYLINE = os.getenv("ENABLE_AUTHOR_BYLINE", "True").lower() == "true"
     ENABLE_AI_DISCLOSURE = os.getenv("ENABLE_AI_DISCLOSURE", "True").lower() == "true"
 
+    # Fresh-topic web-search fallback: when a campaign stalls on too many consecutive
+    # duplicate/failed generation attempts (the fixed category/keyword pool has gone
+    # stale — see ConcurrentCampaignManager), search the live web for current
+    # TARGET_CITY news/events and feed them into the seed pool as brand-new topics
+    # instead of continuing to retry the same exhausted pool.
+    # Always uses Anthropic's web_search tool directly against FRESH_TOPIC_SEARCH_MODEL
+    # (see ContentGeneratorAgent.fetch_fresh_topics) regardless of what MODEL_NAME is
+    # set to for regular article writing — the web_search tool type is Anthropic-
+    # specific, so this keeps working even if the primary writing model is swapped.
+    ENABLE_FRESH_TOPIC_FALLBACK = os.getenv("ENABLE_FRESH_TOPIC_FALLBACK", "True").lower() == "true"
+    FRESH_TOPIC_SEARCH_MODEL = os.getenv("FRESH_TOPIC_SEARCH_MODEL", "anthropic/claude-haiku-4-5-20251001")
+    FRESH_TOPIC_FAILURE_THRESHOLD = int(os.getenv("FRESH_TOPIC_FAILURE_THRESHOLD", "4"))
+    # Below this many usable (not-already-published) entries in SCRAPED_ARTICLES_JSON,
+    # top the pool up with a web search at campaign start — covers the case where the
+    # browser-scraper that normally fills that file isn't installed/running at all,
+    # not just the "ran dry mid-campaign" case FRESH_TOPIC_FAILURE_THRESHOLD covers.
+    MIN_SEED_POOL_SIZE = int(os.getenv("MIN_SEED_POOL_SIZE", "15"))
+    FRESH_TOPIC_TOPUP_BATCH_SIZE = int(os.getenv("FRESH_TOPIC_TOPUP_BATCH_SIZE", "10"))
+
     # Scraper Configuration
     SCRAPER_RAW_MODE = os.getenv("SCRAPER_RAW_MODE", "0") == "1"
     SCRAPER_PAGE_LOAD_TIMEOUT = int(os.getenv("SCRAPER_PAGE_LOAD_TIMEOUT", "30"))
@@ -493,6 +512,15 @@ class Config:
     WORDPRESS_BASE_URL = os.getenv("WORDPRESS_BASE_URL")
     WORDPRESS_USERNAME = os.getenv("WORDPRESS_USERNAME")
     WORDPRESS_TOKEN = os.getenv("WORDPRESS_TOKEN")
+
+    # Cart Export (okghumo) — attached to the campaign email alongside the articles.
+    # Kill switch defaults to on but lets ops disable it via .env without a code change
+    # if the endpoint is ever down/retired.
+    CART_EXPORT_ENABLED = os.getenv("CART_EXPORT_ENABLED", "True").lower() == "true"
+    CART_EXPORT_API_URL = os.getenv("CART_EXPORT_API_URL", "http://prod.okghumo.com/api/carts/export/xlsx")
+    # How many days back (from "today") the exported single-day window covers.
+    # 0 = today's carts (the day the cron actually runs on); 1 = yesterday's, etc.
+    CART_EXPORT_LOOKBACK_DAYS = int(os.getenv("CART_EXPORT_LOOKBACK_DAYS", "0"))
 
     # SMTP Email Configuration
     SMTP_HOST = os.getenv("SMTP_HOST", "smtp.gmail.com")
@@ -585,6 +613,7 @@ class Config:
     PROJECT_DATA_CSV = os.path.join(BASE_DIR, "services.csv")  # Renamed from products.csv
     CSV_PATH = os.path.join(BASE_DIR, "database", "articles.csv")
     USED_TITLES_CSV = os.path.join(BASE_DIR, "database", "used_titles.csv")
+    IMAGE_HASHES_PATH = os.path.join(BASE_DIR, "database", "image_hashes.json")
     VECTOR_STORE_PATH = os.path.join(BASE_DIR, "vector_store")
     OUTPUT_DIR = os.path.join(BASE_DIR, "output")
     BRAND_OUTPUT_DIR = os.path.join(OUTPUT_DIR, "brand")
@@ -734,6 +763,19 @@ class Config:
     PRODUCT_ID_COL = _schema_map_cfg.get("id_column", os.getenv("PRODUCT_ID_COL", "service_name"))
 
     IMAGE_GENERATION_RATIO = float(os.getenv("IMAGE_GENERATION_RATIO", "1.0"))
+
+    # Near-duplicate hero-image guard (see src/services/image_dedup.py): a new
+    # image is fingerprinted and compared against recently generated ones via
+    # Hamming distance on a 64-bit difference-hash (dHash). Below this distance
+    # it's treated as a near-duplicate and regenerated (bounded by
+    # IMAGE_DEDUP_MAX_RETRIES, then accepted anyway — never blocks the
+    # pipeline). 0-64 scale. 14 is calibrated from real data, not guessed: a
+    # confirmed real duplicate pair from this project scored 11 (the single
+    # closest pair in a 21-pair test set), while every unrelated pair scored
+    # 18+ — 14 sits with margin on both sides of that gap.
+    IMAGE_SIMILARITY_THRESHOLD = int(os.getenv("IMAGE_SIMILARITY_THRESHOLD", "14"))
+    IMAGE_DEDUP_MAX_RETRIES = int(os.getenv("IMAGE_DEDUP_MAX_RETRIES", "2"))
+    IMAGE_HASH_HISTORY_LIMIT = int(os.getenv("IMAGE_HASH_HISTORY_LIMIT", "300"))
 
     # SEO Configuration
     MIN_WORD_COUNT = int(os.getenv("MIN_WORD_COUNT", "1000"))

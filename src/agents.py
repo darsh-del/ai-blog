@@ -16,10 +16,14 @@ import threading
 from datetime import datetime
 from typing import List, Dict, Optional, Tuple, Set
 
+import litellm
+
 from src.llm_client import call_llm, LLM_AVAILABLE, RateLimitExhaustedError
 from src.config import Config
 from src.models import ArticleDraft, Metadata, SEOReport, SEOMetric, LLMConfig
-from prompts.prompts import create_content_prompt, create_humanize_prompt, create_title_prompt
+from prompts.prompts import (
+    create_content_prompt, create_humanize_prompt, create_title_prompt, create_fresh_topics_prompt
+)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -840,20 +844,135 @@ class ContentGeneratorAgent:
         titles = []
         for attempt_idx in range(num):
             tmpl = templates[attempt_idx % len(templates)]
+            display_title = tmpl.format(cat=cat, city=city, year=year)
             # 8-character hex suffix from the OS CSPRNG — collision-free in practice.
+            # Registered in TitleManager only, under a key that never gets shown to a
+            # reader: it guarantees this loop always produces `num` titles even once
+            # every template above has already been used for this category, without
+            # leaking a raw "[a1b2c3d4]" tag into a real article's H1/email/publish
+            # title (that used to happen — the clean display_title below is what
+            # actually gets returned and published now).
             uid = secrets.token_hex(4)
-            title = tmpl.format(cat=cat, city=city, year=year) + f" [{uid}]"
-            # save_used_title() guards against exact duplicates and is thread-safe.
-            # The uid suffix makes actual duplicates practically impossible.
-            if title.lower().strip() not in self.title_manager.used_titles:
-                titles.append(title)
-                self.title_manager.save_used_title(title)
+            dedup_title = f"{display_title} [{uid}]"
+            if dedup_title.lower().strip() not in self.title_manager.used_titles:
+                titles.append(display_title)
+                self.title_manager.save_used_title(dedup_title)
 
         logger.info(
             "[TITLE_GEN] Fallback produced %d/%d titles for category '%s'.",
             len(titles), num, cat
         )
         return titles
+
+    def fetch_fresh_topics(self, num: int = 5) -> Tuple[List[Dict], float]:
+        """
+        Web-search-augmented fallback for when the static category/keyword pool has
+        gone stale — called by ConcurrentCampaignManager after too many consecutive
+        duplicate/failed generation attempts (Config.FRESH_TOPIC_FAILURE_THRESHOLD).
+
+        Searches the live web for current TARGET_CITY news/events and turns them
+        into fresh seed dicts (title + keywords + category) that plug into the exact
+        same seed-pool mechanism the campaign already uses for scraped-competitor
+        seeds — nothing downstream needs to know these came from a web search
+        instead of a CSV. Each seed carries its OWN category label (not one of the
+        fixed rotation categories) so the content prompt's category-focus
+        instructions stay about the actual news item instead of forcing the title
+        back into an unrelated existing category.
+
+        Deliberately bypasses call_llm()'s shared provider-fallback chain: Anthropic's
+        web_search tool type isn't understood by the OpenAI/Gemini models in that
+        chain, and this always needs Anthropic regardless of what Config.MODEL_NAME
+        is set to for regular article writing. Fails soft — any error returns
+        ([], 0.0) so a stalled campaign just keeps using its existing pool exactly
+        as before this feature existed, rather than crashing the run.
+
+        Returns (topics, cost_usd). The cost is real API spend and must be added to
+        campaign totals by the caller even when topics is empty — same "always
+        account for the money spent" rule already followed by humanize_article().
+        """
+        if not Config.ENABLE_FRESH_TOPIC_FALLBACK:
+            logger.info("[FRESH_TOPICS] Skipped: ENABLE_FRESH_TOPIC_FALLBACK is off.")
+            return [], 0.0
+        if not Config.ANTHROPIC_API_KEY:
+            logger.warning("[FRESH_TOPICS] Skipped: ANTHROPIC_API_KEY not set — web_search needs Anthropic directly.")
+            return [], 0.0
+
+        logger.info(
+            "[FRESH_TOPICS] Requesting %d topic(s) for '%s' via %s (max_uses=%d searches)...",
+            num, Config.TARGET_CITY, Config.FRESH_TOPIC_SEARCH_MODEL, num
+        )
+        try:
+            response = litellm.completion(
+                model=Config.FRESH_TOPIC_SEARCH_MODEL,
+                messages=[{"role": "user", "content": create_fresh_topics_prompt(num=num)}],
+                tools=[{"type": "web_search_20250305", "name": "web_search", "max_uses": num}],
+                max_tokens=1200,
+                temperature=0.5,
+            )
+            content = response.choices[0].message.content or ""
+
+            # Log the actual search queries Claude issued — makes it visible in the
+            # logs that a real search ran, and what it searched for, not just the
+            # final answer text.
+            tool_calls = getattr(response.choices[0].message, "tool_calls", None) or []
+            queries = [
+                tc.function.arguments for tc in tool_calls
+                if getattr(tc, "function", None) and tc.function.name == "web_search"
+            ]
+            if queries:
+                logger.info("[FRESH_TOPICS] Search quer%s issued: %s",
+                            "y" if len(queries) == 1 else "ies", "; ".join(queries))
+            search_count = getattr(getattr(response, "usage", None), "server_tool_use", None)
+            search_count = getattr(search_count, "web_search_requests", None)
+            logger.info(
+                "[FRESH_TOPICS] Raw model response (%d chars, %s web search call(s)):\n%s",
+                len(content), search_count if search_count is not None else "unknown", content
+            )
+
+            try:
+                cost = float(litellm.completion_cost(completion_response=response) or 0.0)
+            except Exception:  # pricing DB miss — not fatal, just under-reports this call's cost
+                cost = 0.0
+            usage = getattr(response, "usage", None)
+            logger.info(
+                "[FRESH_TOPICS] Usage: prompt_tokens=%s completion_tokens=%s | Cost: $%.4f",
+                getattr(usage, "prompt_tokens", "?"), getattr(usage, "completion_tokens", "?"), cost
+            )
+        except Exception as err:
+            logger.warning("[FRESH_TOPICS] Web-search topic discovery failed: %s", err)
+            return [], 0.0
+
+        topics: List[Dict] = []
+        for line in content.split("\n"):
+            line = line.strip().lstrip("-*•").strip()
+            if not line:
+                continue
+            if line.count("|") < 2:
+                logger.debug("[FRESH_TOPICS] Skipped line (not enough '|' fields): %r", line)
+                continue
+            parts = [p.strip() for p in line.split("|")]
+            title = re.sub(r"^\d+[\.\)]\s*", "", parts[0]).strip().strip("*").strip()
+            keywords = [k.strip() for k in parts[1].split(",") if k.strip()]
+            category = parts[2].strip().strip("*").strip()
+
+            if not title or len(title) <= 8 or not category:
+                logger.debug("[FRESH_TOPICS] Skipped line (missing title/category): %r", line)
+                continue
+            if self.title_manager.is_title_used(title, self.slug_registry):
+                logger.info("[FRESH_TOPICS] Skipped '%s' — already used/near-duplicate title.", title)
+                continue
+
+            topics.append({"title": title, "keywords": keywords[:10], "category": category, "source": "web_search"})
+            logger.info(
+                "[FRESH_TOPICS] Accepted topic: '%s' | category='%s' | keywords=%s",
+                title, category, ", ".join(keywords) if keywords else "(none)"
+            )
+
+        logger.info(
+            "[FRESH_TOPICS] Done: %d/%d line(s) accepted as fresh, non-duplicate topic seed(s). Cost: $%.4f",
+            len(topics), num, cost
+        )
+        return topics, cost
 
     def _should_include_brand_mention(self) -> bool:
         """

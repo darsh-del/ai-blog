@@ -132,6 +132,44 @@ def create_title_prompt(
     return prompt
 
 
+def create_fresh_topics_prompt(num: int = 5) -> str:
+    """
+    Prompt for the web-search-augmented stagnation fallback (see
+    ContentGeneratorAgent.fetch_fresh_topics): only meaningful when sent alongside
+    Anthropic's web_search tool. Asks for CURRENT, DATED news/events rather than
+    evergreen topics, and asks for a category label per item so the resulting
+    article stays about that specific news item instead of being forced back into
+    one of the fixed rotation categories.
+    """
+    return f"""
+    You are a travel news researcher for {Config.INDUSTRY_NAME} in {Config.TARGET_CITY}.
+
+    Search the web for {num} CURRENT, DATED news items, events, openings, closures,
+    advisories, or notable changes relevant to visitors and {Config.INDUSTRY_NAME} in
+    {Config.TARGET_CITY} — the kind of thing a local news site or tourism board would
+    publish this month. Prioritise things that are genuinely NEW (a bridge/attraction
+    opening, a new operator, a safety advisory, a seasonal closure/reopening, a policy
+    change) over generic evergreen facts that could have been true any year.
+
+    For each item, output EXACTLY this format, one per line, nothing else:
+
+    1. [Specific, newsworthy title phrase] | [keyword1, keyword2, keyword3] | [Short category label]
+
+    Rules:
+    - Title must be specific and newsworthy (e.g. "Bajrang Setu Glass Bridge Opens in
+      Rishikesh — What Visitors Should Know"), never generic — generic topics like
+      "Things to Do in {Config.TARGET_CITY}" are already covered elsewhere and are
+      NOT acceptable here.
+    - 3-6 keywords per line, comma-separated, directly related to that specific item.
+    - Category label: a short 2-5 word noun phrase naming this specific item (e.g.
+      "Bajrang Setu Bridge"), NOT a broad category — every item should get its own
+      distinct label.
+    - Only include items you actually found via search. Do not invent or guess.
+    - No commentary, headers, or extra text before/after the list — only the
+      numbered lines themselves.
+    """
+
+
 def create_location_sanitizer_prompt(
     sample_titles: List[str],
     sample_keywords: List[str],

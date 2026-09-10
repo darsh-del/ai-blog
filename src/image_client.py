@@ -100,12 +100,15 @@ def generate_blog_image(prompt: str) -> Tuple[Optional[bytes], float]:
 
     primary_model: str = Config.IMAGE_MODEL or "gemini-2.5-flash-image"
 
-    # Ordered fallback chain for Gemini image models
+    # Ordered fallback chain for Gemini image models.
+    # NOTE: gemini-2.0-flash-exp-image-generation and imagen-3.0-generate-002 are
+    # deprecated/removed from the v1beta generateContent API (confirmed 404s) — do
+    # not add them back. gemini-2.0-flash-preview-image-generation is the current
+    # replacement per the migration note at the top of this file.
     models_to_try = [
         primary_model,
         "gemini-2.5-flash-image",
-        "gemini-2.0-flash-exp-image-generation",
-        "imagen-3.0-generate-002",
+        "gemini-2.0-flash-preview-image-generation",
     ]
     # Remove duplicates while preserving order
     models_to_try = list(dict.fromkeys(models_to_try))

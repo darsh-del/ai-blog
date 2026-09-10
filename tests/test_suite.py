@@ -13,6 +13,7 @@ Consolidates all essential unit tests across:
   - WordPress Publisher Integration
 """
 
+import io
 import json
 import logging
 import os
@@ -23,6 +24,8 @@ from typing import Generator
 from unittest.mock import MagicMock, patch
 
 import pytest
+import requests
+from PIL import Image
 
 from src.agents import ContentGeneratorAgent, SlugRegistry, TitleManager
 from src.concurrent_manager import ConcurrentCampaignManager, _count_existing_articles_by_category
@@ -30,10 +33,12 @@ from src.config import Config
 from src.models import ArticleDraft, InternalLink, LLMConfig, Metadata, SEOMetric, SEOReport
 from src.publishers.wordpress import WordPressPublisher
 from src.services.email_service import EmailService, _parse_email_list
+from src.services import cart_export_service
 from src.services.link_sanitizer import LinkSanitizer
 from src.services.linking_manager import LinkingManager
 from src.services.orchestrator import BlogGeneratorOrchestrator
 from src.services.seo_auto_healer import SEOAutoHealer
+from src.services.image_dedup import ImageDedupGuard
 from prompts.writing_styles import select_writing_style, WRITING_STYLES
 
 _VALID_DESC = (
@@ -283,8 +288,9 @@ def test_email_service_helpers() -> None:
     assert "1450" in html
 
 
+@patch('src.services.email_service.fetch_cart_export', return_value=None)
 @patch('smtplib.SMTP')
-def test_send_smtp_email_with_cc(mock_smtp_cls: MagicMock) -> None:
+def test_send_smtp_email_with_cc(mock_smtp_cls: MagicMock, _mock_cart_export: MagicMock) -> None:
     """Verify that SMTP delivery handles both TO and CC recipient routing."""
     service = EmailService()
     mock_articles = [{"title": "Test CC Article", "score": 90, "word_count": 1200}]
@@ -301,6 +307,43 @@ def test_send_smtp_email_with_cc(mock_smtp_cls: MagicMock) -> None:
     assert mock_server.sendmail.called
     sender, recipients, _ = mock_server.sendmail.mock_calls[0].args
     assert set(recipients) == {"to1@example.com", "to2@example.com", "cc1@example.com", "cc2@example.com"}
+
+
+def test_cart_export_service(tmp_path) -> None:
+    """Verify fetch_cart_export: disabled kill switch, success, and network-failure paths."""
+    fake_xlsx = b"PK\x03\x04fake-xlsx-bytes"
+
+    with patch.object(Config, 'CART_EXPORT_ENABLED', False):
+        assert cart_export_service.fetch_cart_export() is None
+
+    mock_response = MagicMock()
+    mock_response.content = fake_xlsx
+    mock_response.raise_for_status = MagicMock()
+    with patch.object(Config, 'CART_EXPORT_ENABLED', True), \
+         patch('src.services.cart_export_service.requests.get', return_value=mock_response) as mock_get:
+        result = cart_export_service.fetch_cart_export()
+
+    assert result is not None
+    content, filename = result
+    assert content == fake_xlsx
+    assert filename.startswith("cart-export_") and filename.endswith(".xlsx")
+    called_params = mock_get.call_args.kwargs["params"]
+    assert called_params["startDate"] == called_params["endDate"]  # single-day window
+
+    with patch.object(Config, 'CART_EXPORT_ENABLED', True), \
+         patch('src.services.cart_export_service.requests.get', side_effect=requests.ConnectionError("boom")):
+        assert cart_export_service.fetch_cart_export() is None
+
+    # EmailService wires a successful fetch into its generic attachment list.
+    service = EmailService()
+    with patch('src.services.email_service.fetch_cart_export', return_value=(fake_xlsx, "cart-export_2026-01-01.xlsx")), \
+         patch.object(Config, 'EMAILS_DIR', str(tmp_path)):
+        attachment = service._generate_cart_export_attachment("20260101_000000", "abcd1234")  # pylint: disable=protected-access
+
+    assert attachment is not None
+    saved_path, saved_filename = attachment
+    assert os.path.exists(saved_path)
+    assert saved_filename.endswith(".xlsx")
 
 
 @patch('smtplib.SMTP')
@@ -418,6 +461,154 @@ def test_concurrent_campaign_worker() -> None:
     assert result["is_published"] is True
 
 
+def test_stagnation_triggers_fresh_topic_refresh_once() -> None:
+    """Fresh-topic fallback: after FRESH_TOPIC_FAILURE_THRESHOLD consecutive
+    failures the refresh callback must fire exactly once (not again on every later
+    failure in the same streak), and a success must reset the streak so a later
+    stagnation episode can trigger it again."""
+    manager = ConcurrentCampaignManager(orchestrator=MagicMock())
+    stats = {
+        "success_count": 0, "failure_count": 0, "skipped_count": 0,
+        "processed_attempts": 0, "consecutive_failures": 0, "fresh_topics_triggered": False,
+        "total_tokens": 0, "total_cost": 0.0, "useful_tokens": 0, "useful_cost": 0.0,
+        "articles_with_images_created": 0, "articles_published": 0,
+        "articles_with_images_published": 0, "total_articles": 100,
+        "successful_articles": [], "max_attempts": 1000,
+    }
+    executor = MagicMock()
+    futures_set = set()
+    get_next_job_params = MagicMock(return_value={"category": "x", "title": "", "keywords": None})
+    refresh_fn = MagicMock()
+
+    def failed_future():
+        fut = MagicMock()
+        fut.result.return_value = {
+            "status": "failure", "error": "duplicate title",
+            "total_tokens": 0, "total_cost": 0.0, "useful_tokens": 0, "useful_cost": 0.0,
+        }
+        return fut
+
+    with patch('src.config.Config.FRESH_TOPIC_FAILURE_THRESHOLD', 4):
+        for _ in range(4):
+            manager._handle_worker_result(
+                failed_future(), stats, executor, futures_set, False, get_next_job_params, refresh_fn
+            )
+        assert stats["consecutive_failures"] == 4
+        refresh_fn.assert_called_once()
+
+        # One more failure in the same streak must NOT re-trigger it.
+        manager._handle_worker_result(
+            failed_future(), stats, executor, futures_set, False, get_next_job_params, refresh_fn
+        )
+        refresh_fn.assert_called_once()
+
+        # A success resets the streak, allowing a future stagnation episode to fire again.
+        success_fut = MagicMock()
+        success_fut.result.return_value = {
+            "status": "success", "title": "T", "score": 90, "type": "Industry-Generic",
+            "total_tokens": 0, "total_cost": 0.0, "useful_tokens": 0, "useful_cost": 0.0,
+        }
+        manager._handle_worker_result(
+            success_fut, stats, executor, futures_set, False, get_next_job_params, refresh_fn
+        )
+        assert stats["consecutive_failures"] == 0
+        assert stats["fresh_topics_triggered"] is False
+
+
+def test_persist_fresh_topics_appends_and_dedupes(tmp_path) -> None:
+    """Seed-pool health check: fresh topics must be appended to
+    SCRAPED_ARTICLES_JSON (so future runs — not just this one — start with a
+    fuller pool), and a topic whose title already exists in the file must be
+    skipped rather than duplicated."""
+    seed_file = tmp_path / "scraped_articles.json"
+    seed_file.write_text(json.dumps([{"title": "Existing Seed Title", "keywords": ["x"]}]))
+
+    manager = ConcurrentCampaignManager(orchestrator=MagicMock())
+    with patch('src.concurrent_manager.Config.SCRAPED_ARTICLES_JSON', str(seed_file)):
+        manager._persist_fresh_topics([
+            {"title": "Existing Seed Title", "keywords": ["dup"], "category": "Dup", "source": "web_search"},
+            {"title": "Brand New Bridge Opens in Rishikesh", "keywords": ["bridge"], "category": "Bridge", "source": "web_search"},
+        ])
+
+        saved = json.loads(seed_file.read_text())
+
+    assert len(saved) == 2, "Duplicate title must not be appended a second time"
+    titles = {obj["title"] for obj in saved}
+    assert titles == {"Existing Seed Title", "Brand New Bridge Opens in Rishikesh"}
+
+
+def test_persist_fresh_topics_creates_file_when_missing(tmp_path) -> None:
+    """No existing SCRAPED_ARTICLES_JSON (the actual production situation when the
+    scraper has never run) must not crash — it should create the file fresh."""
+    seed_file = tmp_path / "does_not_exist_yet.json"
+    manager = ConcurrentCampaignManager(orchestrator=MagicMock())
+
+    with patch('src.concurrent_manager.Config.SCRAPED_ARTICLES_JSON', str(seed_file)):
+        manager._persist_fresh_topics([{"title": "First Ever Seed", "keywords": [], "category": "New"}])
+        saved = json.loads(seed_file.read_text())
+
+    assert len(saved) == 1
+    assert saved[0]["title"] == "First Ever Seed"
+
+
+def test_fetch_and_persist_fresh_topics_wraps_agent_call(tmp_path) -> None:
+    """The shared helper used by both the campaign-start top-up and the
+    mid-run stagnation fallback must both fetch AND persist in one call."""
+    seed_file = tmp_path / "scraped_articles.json"
+    mock_orchestrator = MagicMock()
+    mock_orchestrator.content_generator.fetch_fresh_topics.return_value = (
+        [{"title": "Fresh Topic From Search", "keywords": ["k"], "category": "C"}], 0.045
+    )
+    manager = ConcurrentCampaignManager(orchestrator=mock_orchestrator)
+
+    with patch('src.concurrent_manager.Config.SCRAPED_ARTICLES_JSON', str(seed_file)):
+        topics, cost = manager._fetch_and_persist_fresh_topics(num=7)
+        saved = json.loads(seed_file.read_text())
+
+    mock_orchestrator.content_generator.fetch_fresh_topics.assert_called_once_with(num=7)
+    assert cost == 0.045
+    assert topics[0]["title"] == "Fresh Topic From Search"
+    assert saved[0]["title"] == "Fresh Topic From Search"
+
+
+def test_campaign_start_tops_up_low_seed_pool(tmp_path) -> None:
+    """The core Phase 1 fix, end-to-end: a near-empty scraped_articles.json (the
+    real production situation when the browser scraper isn't installed) must
+    trigger a web-search top-up at campaign START — before any article
+    generation begins — not only after repeated mid-run failures."""
+    seed_file = tmp_path / "scraped_articles.json"
+    seed_file.write_text(json.dumps([{"title": "Only One Existing Seed"}]))  # well under the minimum
+
+    mock_orchestrator = MagicMock()
+    mock_orchestrator.content_generator.title_manager.is_title_used.return_value = False
+    mock_orchestrator.content_generator.fetch_fresh_topics.return_value = (
+        [{"title": "Fresh Web Search Topic", "keywords": ["k"], "category": "C"}], 0.03
+    )
+    mock_orchestrator.content_generator.generate_titles.return_value = ["A Generated Title"]
+
+    mock_article = MagicMock(
+        word_count=1200, token_usage={"total_tokens": 100}, cost=0.01,
+        useful_tokens={"total_tokens": 100}, useful_cost=0.01, image_path="", is_published=False
+    )
+    mock_article.title = "Generated Title"
+    mock_orchestrator.generate_blog.return_value = (mock_article, MagicMock(overall_score=90), None)
+
+    manager = ConcurrentCampaignManager(orchestrator=mock_orchestrator)
+
+    with patch('src.concurrent_manager.Config.SCRAPED_ARTICLES_JSON', str(seed_file)), \
+            patch('src.concurrent_manager.Config.MIN_SEED_POOL_SIZE', 5), \
+            patch('src.concurrent_manager.Config.ENABLE_FRESH_TOPIC_FALLBACK', True):
+        manager.run_campaign(total_articles=1, max_workers=1)
+
+    mock_orchestrator.content_generator.fetch_fresh_topics.assert_called_once_with(
+        num=Config.FRESH_TOPIC_TOPUP_BATCH_SIZE
+    )
+    saved = json.loads(seed_file.read_text())
+    assert any(obj["title"] == "Fresh Web Search Topic" for obj in saved), (
+        "Fresh topic from the top-up must be persisted to disk for future runs"
+    )
+
+
 # ==============================================================================
 # 9. AGENT GENERATOR & OFFLINE TEMPLATE TESTS
 # ==============================================================================
@@ -507,6 +698,64 @@ def test_byline_inserts_after_existing_updated_date_line() -> None:
         assert injected.index("Travel Team") < injected.index("Body text")
 
 
+@patch('src.agents.litellm')
+def test_fetch_fresh_topics_parses_search_results(mock_litellm: MagicMock) -> None:
+    """Fresh-topic web-search fallback: parses the 'title | keywords | category'
+    format, skips malformed lines, and passes Anthropic's web_search tool through
+    to litellm — confirms the request is actually search-augmented, not a plain
+    completion someone forgot to attach the tool to."""
+    with patch('src.agents.TitleManager'), patch('src.agents.SlugRegistry'), \
+            patch('src.config.Config.ANTHROPIC_API_KEY', 'test_key'):
+        agent = ContentGeneratorAgent(model_name="anthropic/claude-haiku-4-5-20251001")
+        agent.title_manager = MagicMock()
+        agent.title_manager.is_title_used.return_value = False
+
+        mock_message = MagicMock()
+        mock_message.content = (
+            "1. Bajrang Setu Glass Bridge Opens in Rishikesh | glass bridge, bajrang setu | Bajrang Setu Bridge\n"
+            "not a valid line without two pipes\n"
+            "2. Valley Rope Jump Launches in Rishikesh | valley rope jump, adventure | Valley Rope Jump\n"
+        )
+        # Realistic tool_calls shape from a real web-search response (see the
+        # docstring example in Anthropic's docs) — an empty/None value here would
+        # also be realistic (a turn that didn't need to search), covered by the
+        # defensive `getattr(..., None) or []` in fetch_fresh_topics().
+        mock_tool_call = MagicMock()
+        mock_tool_call.function.name = "web_search"
+        mock_tool_call.function.arguments = '{"query": "Rishikesh India 2026 tourism news"}'
+        mock_message.tool_calls = [mock_tool_call]
+        mock_choice = MagicMock()
+        mock_choice.message = mock_message
+        mock_response = MagicMock()
+        mock_response.choices = [mock_choice]
+        mock_litellm.completion.return_value = mock_response
+        mock_litellm.completion_cost.return_value = 0.0234
+
+        topics, cost = agent.fetch_fresh_topics(num=3)
+
+        assert cost == 0.0234
+        assert len(topics) == 2
+        assert topics[0]["title"] == "Bajrang Setu Glass Bridge Opens in Rishikesh"
+        assert topics[0]["category"] == "Bajrang Setu Bridge"
+        assert "glass bridge" in topics[0]["keywords"]
+
+        call_kwargs = mock_litellm.completion.call_args.kwargs
+        assert call_kwargs["tools"][0]["type"] == "web_search_20250305"
+
+
+def test_fetch_fresh_topics_fails_soft_without_api_key() -> None:
+    """No ANTHROPIC_API_KEY configured must return ([], 0.0) without ever calling
+    litellm — a stalled campaign should keep using its existing pool, not crash."""
+    with patch('src.agents.TitleManager'), patch('src.agents.SlugRegistry'), \
+            patch('src.config.Config.ANTHROPIC_API_KEY', None), \
+            patch('src.agents.litellm') as mock_litellm:
+        agent = ContentGeneratorAgent(model_name="anthropic/claude-haiku-4-5-20251001")
+        topics, cost = agent.fetch_fresh_topics()
+        assert topics == []
+        assert cost == 0.0
+        mock_litellm.completion.assert_not_called()
+
+
 def test_fallback_title_does_not_double_city_name(tmp_path) -> None:
     """Regression test: category strings are stored as "X in <City>" (e.g. "River
     Rafting in Rishikesh"), but the fallback title templates also append "{city}"
@@ -522,6 +771,25 @@ def test_fallback_title_does_not_double_city_name(tmp_path) -> None:
         assert titles, "Fallback generator produced no titles"
         for title in titles:
             assert "rishikesh in rishikesh" not in title.lower(), title
+
+
+def test_fallback_title_has_no_raw_uid_tag(tmp_path) -> None:
+    """Regression test: the fallback title generator appends a random hex uid
+    (e.g. "[a1b2c3d4]") to guarantee uniqueness even after every template has been
+    used for a category — but that tag is bookkeeping only and must never reach a
+    real, published title (it did: 'Best River Rafting in Rishikesh — Complete
+    2026 Guide [41620674]' was actually generated and emailed live)."""
+    with patch('src.agents.SlugRegistry'), patch('src.config.Config.TARGET_CITY', 'Rishikesh'):
+        agent = ContentGeneratorAgent(model_name="anthropic/claude-haiku-4-5-20251001")
+        agent.title_manager = TitleManager(csv_path=str(tmp_path / "used_titles.csv"))
+
+        # Request more titles than there are templates so the uid-fallback path
+        # (same template reused) is exercised, not just the first pass.
+        titles = agent._generate_fallback_titles(num=25, category="River Rafting")
+
+        assert titles, "Fallback generator produced no titles"
+        for title in titles:
+            assert "[" not in title and "]" not in title, title
 
 
 def test_duplicate_llm_h1_falls_back_to_deduped_title(tmp_path) -> None:
@@ -762,3 +1030,104 @@ def test_seo_healer_strips_generic_conclusion_closer() -> None:
         result = SEOAutoHealer._strip_generic_closer(html)
         assert "rare destinations" not in result.lower()
         assert "This guide covered X, Y, Z." in result, "must not delete the rest of the paragraph"
+
+
+# ==============================================================================
+# 10. HERO-IMAGE NEAR-DUPLICATE GUARD TESTS
+# ==============================================================================
+
+def _striped_jpeg_bytes(stripe_width: int = 8, size: int = 64, jitter: int = 0, seed: int = 1) -> bytes:
+    """Builds a tiny vertical-striped JPEG in memory. dHash encodes left-right
+    pixel *edges*, so a smooth gradient or solid colour gives it nothing to
+    read (degenerates to a constant hash regardless of content — verified
+    empirically before writing these tests, the same trap solid colours are
+    for average-hash). Stripes give it real edges: two images with a
+    different stripe width land far apart, and the same stripe pattern with
+    per-pixel brightness jitter (no edges moved) lands at distance 0 — that
+    combination is what actually exercises the hash function correctly."""
+    rng = random.Random(seed)
+    img = Image.new("L", (size, size))
+    pixels = img.load()
+    for x in range(size):
+        base = 220 if (x // stripe_width) % 2 == 0 else 30
+        for y in range(size):
+            noise = rng.randint(-jitter, jitter) if jitter else 0
+            pixels[x, y] = max(0, min(255, base + noise))
+    buf = io.BytesIO()
+    img.convert("RGB").save(buf, format="JPEG", quality=95)
+    return buf.getvalue()
+
+
+def test_image_hash_is_deterministic_and_distinguishes_different_images() -> None:
+    """Same image bytes must always hash the same way (so comparisons are
+    meaningful), and two clearly different compositions (narrow vs wide
+    stripes — analogous to two genuinely different photo compositions) must
+    land far apart."""
+    narrow = _striped_jpeg_bytes(stripe_width=4)
+    wide = _striped_jpeg_bytes(stripe_width=32)
+
+    assert ImageDedupGuard.compute_hash(narrow) == ImageDedupGuard.compute_hash(narrow)
+
+    distance = ImageDedupGuard.hamming_distance(
+        ImageDedupGuard.compute_hash(narrow), ImageDedupGuard.compute_hash(wide)
+    )
+    assert distance > Config.IMAGE_SIMILARITY_THRESHOLD, (
+        "Two clearly different compositions must NOT register as near-duplicates"
+    )
+
+
+def test_image_hash_flags_near_identical_images_as_close() -> None:
+    """A lightly re-encoded version of the same composition (simulating two
+    very similar generations of the same scene — same structure, slightly
+    different lighting/exposure) must land within the similarity threshold —
+    this is the actual case the guard exists to catch."""
+    original = _striped_jpeg_bytes(stripe_width=8, jitter=0)
+    near_identical = _striped_jpeg_bytes(stripe_width=8, jitter=8, seed=2)
+
+    distance = ImageDedupGuard.hamming_distance(
+        ImageDedupGuard.compute_hash(original), ImageDedupGuard.compute_hash(near_identical)
+    )
+    assert distance <= Config.IMAGE_SIMILARITY_THRESHOLD
+
+
+def test_find_closest_match_returns_none_with_no_history(tmp_path) -> None:
+    """No prior images generated yet must not error, and must not falsely flag
+    the very first image of a fresh install as a duplicate of nothing."""
+    hashes_file = tmp_path / "image_hashes.json"
+    with patch('src.services.image_dedup.Config.IMAGE_HASHES_PATH', str(hashes_file)):
+        assert ImageDedupGuard.find_closest_match(12345) is None
+
+
+def test_record_and_find_closest_match_roundtrip(tmp_path) -> None:
+    """A recorded hash must be findable afterwards, with the correct Hamming
+    distance attached, and history must persist to disk (so it survives across
+    separate campaign runs/process restarts, not just within one run)."""
+    hashes_file = tmp_path / "image_hashes.json"
+    with patch('src.services.image_dedup.Config.IMAGE_HASHES_PATH', str(hashes_file)):
+        original_hash = ImageDedupGuard.compute_hash(_striped_jpeg_bytes(stripe_width=8, jitter=0))
+        ImageDedupGuard.record(original_hash, "Existing Zipline Article")
+
+        assert hashes_file.exists(), "history must be persisted to disk, not just kept in memory"
+
+        near_dup_hash = ImageDedupGuard.compute_hash(_striped_jpeg_bytes(stripe_width=8, jitter=4, seed=3))
+        match = ImageDedupGuard.find_closest_match(near_dup_hash)
+
+    assert match is not None
+    assert match["title"] == "Existing Zipline Article"
+    assert match["distance"] == ImageDedupGuard.hamming_distance(near_dup_hash, original_hash)
+
+
+def test_image_hash_history_is_capped(tmp_path) -> None:
+    """History must not grow forever — old entries drop off past
+    IMAGE_HASH_HISTORY_LIMIT so the file (and every future comparison) stays
+    small and fast no matter how many articles get published over time."""
+    hashes_file = tmp_path / "image_hashes.json"
+    with patch('src.services.image_dedup.Config.IMAGE_HASHES_PATH', str(hashes_file)), \
+            patch('src.services.image_dedup.Config.IMAGE_HASH_HISTORY_LIMIT', 5):
+        for i in range(8):
+            ImageDedupGuard.record(i, f"Article {i}")
+        history = json.loads(hashes_file.read_text())
+
+    assert len(history) == 5
+    # Oldest entries (0, 1, 2) must have been dropped, newest 5 kept.
+    assert [rec["title"] for rec in history] == [f"Article {i}" for i in range(3, 8)]
