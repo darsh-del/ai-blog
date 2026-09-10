@@ -69,6 +69,11 @@ python -m uvicorn api.main:app --reload --port 8000
 The API will be available at `http://localhost:8000`.  
 Interactive docs at `http://localhost:8000/docs`.
 
+> **Note:** this is for running `uvicorn` directly (bare-metal/local dev). When
+> run via `docker-compose.yml` instead, the container still listens on 8000
+> internally but the host-side port is mapped to **8001** (to avoid colliding
+> with other apps on the same server) — use `http://localhost:8001` in that case.
+
 ---
 
 ## Step 4: Generate a Sample Article (Test Run)

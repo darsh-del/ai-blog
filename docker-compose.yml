@@ -1,3 +1,9 @@
+# Explicit project name so Compose's network/volume namespace (ai-blog_*) never
+# depends on whatever directory this repo happens to be checked out into —
+# guards against colliding with another app (e.g. a differently-named "aichatbot"
+# stack) sharing the same EC2 instance.
+name: ai-blog
+
 services:
   # Main blog generator API
   blog-generator:
@@ -9,7 +15,13 @@ services:
     image: ghcr.io/darsh-del/ai-blog:${IMAGE_TAG:-latest}
     container_name: blog-generator-api
     ports:
-      - "8000:8000"
+      # Host-side remapped to 8001 (container still listens on 8000 internally)
+      # so this doesn't collide with another app's backend defaulting to 8000
+      # on the same EC2 instance. No live service uses this port yet (see the
+      # Dockerfile's commented-out uvicorn CMD) — update the host side again,
+      # or better, front it via a shared reverse proxy instead, once api/main.py
+      # ships and actually needs external reachability.
+      - "8001:8000"
     env_file:
       - .env
     environment:
@@ -72,8 +84,10 @@ services:
   redis:
     image: redis:7-alpine
     container_name: blog-generator-redis
-    ports:
-      - "6379:6379"
+    # No host port published: only blog-generator talks to this, over the
+    # internal blog-network as redis:6379 (see REDIS_HOST/REDIS_PORT above).
+    # Publishing 6379 to the host isn't needed and risks colliding with any
+    # other Redis on the same EC2 instance.
     command: redis-server --appendonly yes
     volumes:
       - redis-data:/data
@@ -90,9 +104,12 @@ services:
   weaviate:
     image: semitechnologies/weaviate:1.27.0
     container_name: blog-generator-weaviate
-    ports:
-      - "8080:8080"
-      - "50051:50051"
+    # No host ports published: only blog-generator talks to this, over the
+    # internal blog-network as weaviate:8080/50051 (see WEAVIATE_HOST/PORT
+    # above) — the healthcheck below also runs inside this container against
+    # its own localhost, so it's unaffected either way. Publishing 8080/50051
+    # to the host isn't needed and is the exact pair another Weaviate stack on
+    # the same EC2 instance is most likely to also publish.
     environment:
       QUERY_DEFAULTS_LIMIT: 25
       AUTHENTICATION_ANONYMOUS_ACCESS_ENABLED: 'true'
