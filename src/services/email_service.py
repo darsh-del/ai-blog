@@ -14,6 +14,7 @@ import logging
 import smtplib
 import shutil
 from datetime import datetime
+from typing import Optional, Tuple
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from email.mime.base import MIMEBase
@@ -36,6 +37,7 @@ except ImportError:
     RGBColor = None
 
 from src.config import Config
+from src.services.cart_export_service import fetch_cart_export
 
 logger = logging.getLogger(__name__)
 
@@ -468,6 +470,36 @@ class EmailService:
                 })
         return docx_attachments, image_attachments
 
+    def _generate_cart_export_attachment(self, timestamp: str, uid: str) -> Optional[Tuple[str, str]]:
+        """
+        Downloads the okghumo cart-export xlsx (see cart_export_service) and saves it
+        under Config.EMAILS_DIR so it can be attached the same way as the article DOCX
+        files. Returns None (and never raises) on any failure — the campaign email must
+        still send with just the articles if this integration is unavailable.
+        """
+        logger.info("[CART_EXPORT] Requesting cart export attachment for this campaign email...")
+        try:
+            result = fetch_cart_export()
+            if not result:
+                logger.warning(
+                    "[CART_EXPORT] No cart export attachment available — email will send without it."
+                )
+                return None
+            file_bytes, filename = result
+            root, ext = os.path.splitext(filename)
+            dest_filename = f"{root}_{timestamp}_{uid}{ext}"
+            dest_path = os.path.join(Config.EMAILS_DIR, dest_filename)
+            with open(dest_path, "wb") as fh:
+                fh.write(file_bytes)
+            logger.info(
+                "[CART_EXPORT] Saved cart export attachment to disk: %s (%d bytes).",
+                dest_path, len(file_bytes)
+            )
+            return dest_path, dest_filename
+        except OSError as write_err:
+            logger.warning("[CART_EXPORT] Could not save cart export attachment to disk: %s", write_err)
+            return None
+
     # pylint: disable=too-many-locals
     def _send_smtp_email(
         self, html_body: str, docx_attachments: list, image_attachments: list, num_articles: int
@@ -528,10 +560,11 @@ class EmailService:
         # Attach HTML body to related container
         msg_body.attach(MIMEText(html_body, "html"))
 
-        # Attach DOCX files to root mixed container
+        # Attach DOCX (and any other generic file, e.g. the cart export xlsx) to root mixed container
         for d_path, d_filename in docx_attachments:
             if os.path.exists(d_path):
                 try:
+                    file_size = os.path.getsize(d_path)
                     with open(d_path, "rb") as f_attach:
                         part = MIMEBase("application", "octet-stream")
                         part.set_payload(f_attach.read())
@@ -541,8 +574,11 @@ class EmailService:
                         f"attachment; filename={d_filename}",
                     )
                     msg.attach(part)
+                    logger.info("[EMAIL_ATTACH] Attached '%s' to outgoing email (%d bytes).", d_filename, file_size)
                 except (OSError, ValueError, TypeError) as attachment_error:
-                    logger.error("Failed to attach file %s: %s", d_filename, attachment_error)
+                    logger.error("[EMAIL_ATTACH] Failed to attach file %s: %s", d_filename, attachment_error)
+            else:
+                logger.warning("[EMAIL_ATTACH] Skipped '%s' — file no longer exists at %s.", d_filename, d_path)
 
         # Attach Inline Images to related container
         for img_info in image_attachments:
@@ -648,6 +684,12 @@ class EmailService:
         # 2. Generate DOCX attachments
         Config.ensure_directories()
         docx_attachments, image_attachments = self._generate_attachments(articles, timestamp, uid)
+
+        # 2b. Best-effort cart export attachment — appended to the same generic
+        # "file attachments" list; never blocks or fails the email if unavailable.
+        cart_export_attachment = self._generate_cart_export_attachment(timestamp, uid)
+        if cart_export_attachment:
+            docx_attachments.append(cart_export_attachment)
 
         # 3. Check if SMTP configuration is present
         is_smtp_available = bool(Config.SMTP_PASSWORD and Config.SMTP_USERNAME)

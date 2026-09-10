@@ -66,6 +66,55 @@ class ConcurrentCampaignManager:
         """
         self.orchestrator = orchestrator
 
+    def _persist_fresh_topics(self, topics: list) -> None:
+        """Appends newly-found fresh topics to Config.SCRAPED_ARTICLES_JSON — the
+        same file the (often unavailable) browser scraper would otherwise fill —
+        de-duplicated by exact title match, so future campaign runs start with a
+        fuller seed pool instead of an empty one, not just this run."""
+        if not topics:
+            return
+
+        existing = []
+        if os.path.exists(Config.SCRAPED_ARTICLES_JSON):
+            try:
+                with open(Config.SCRAPED_ARTICLES_JSON, 'r', encoding='utf-8') as file_handle:
+                    existing = json.load(file_handle)
+            except (OSError, ValueError) as error:
+                logger.warning(
+                    "[SEED_POOL] Could not read %s to merge fresh topics (starting fresh): %s",
+                    Config.SCRAPED_ARTICLES_JSON, error
+                )
+                existing = []
+
+        seen_titles = {(obj.get("title") or "").strip().lower() for obj in existing}
+        new_entries = [t for t in topics if t.get("title", "").strip().lower() not in seen_titles]
+        if not new_entries:
+            logger.info("[SEED_POOL] All %d fresh topic(s) already present in %s — nothing to persist.",
+                        len(topics), Config.SCRAPED_ARTICLES_JSON)
+            return
+
+        try:
+            with open(Config.SCRAPED_ARTICLES_JSON, 'w', encoding='utf-8') as file_handle:
+                json.dump(existing + new_entries, file_handle, indent=4)
+            logger.info(
+                "[SEED_POOL] Persisted %d new fresh topic(s) to %s (%d total now).",
+                len(new_entries), Config.SCRAPED_ARTICLES_JSON, len(existing) + len(new_entries)
+            )
+        except OSError as error:
+            logger.warning("[SEED_POOL] Failed to persist fresh topics to %s: %s",
+                           Config.SCRAPED_ARTICLES_JSON, error)
+
+    def _fetch_and_persist_fresh_topics(self, num: int) -> tuple:
+        """Shared by the campaign-start pool top-up and the mid-run stagnation
+        fallback: fetches fresh topics via web search and persists any new ones to
+        disk (see _persist_fresh_topics), so a search triggered either way
+        benefits every future run, not just the one that triggered it.
+        Returns (topics, cost_usd) exactly like ContentGeneratorAgent.fetch_fresh_topics.
+        """
+        topics, cost = self.orchestrator.content_generator.fetch_fresh_topics(num=num)
+        self._persist_fresh_topics(topics)
+        return topics, cost
+
     def _generate_article_worker(
         self,
         article_type: str,
@@ -192,6 +241,12 @@ class ConcurrentCampaignManager:
             "failure_count": 0,
             "skipped_count": 0,
             "processed_attempts": 0,
+            # Stagnation tracking for the fresh-topic web-search fallback: counts
+            # failures/skips since the last success, and whether this stagnation
+            # streak has already triggered a web search (so it fires once per
+            # streak, not on every single failure past the threshold).
+            "consecutive_failures": 0,
+            "fresh_topics_triggered": False,
             "total_tokens": 0,
             "total_cost": 0.0,
             "useful_tokens": 0,
@@ -214,6 +269,38 @@ class ConcurrentCampaignManager:
 
         seeds["pool"] = list(seeds["articles"])
         random.shuffle(seeds["pool"])
+
+        # Seed-pool health check: SCRAPED_ARTICLES_JSON is often empty or stale —
+        # e.g. the browser-scraper that normally fills it needs deps
+        # (undetected-chromedriver) that aren't installed in this environment —
+        # which otherwise means every 'generic' job silently falls back to the
+        # fixed rotation categories with no fresh ideas at all. Top it up with a
+        # real web search before the campaign starts instead of only reacting
+        # after things stall (that's what FRESH_TOPIC_FAILURE_THRESHOLD covers,
+        # unchanged, as a mid-run safety net below).
+        if Config.ENABLE_FRESH_TOPIC_FALLBACK:
+            title_manager = self.orchestrator.content_generator.title_manager
+            slug_registry = self.orchestrator.content_generator.slug_registry
+            usable_count = sum(
+                1 for obj in seeds["articles"]
+                if obj.get("title") and not title_manager.is_title_used(obj["title"], slug_registry)
+            )
+            logger.info(
+                "[SEED_POOL] %d/%d seed(s) in %s are usable (not already published).",
+                usable_count, len(seeds["articles"]), Config.SCRAPED_ARTICLES_JSON
+            )
+            if usable_count < Config.MIN_SEED_POOL_SIZE:
+                print(
+                    f"\n[SEED_POOL] Only {usable_count} usable seed(s) (minimum {Config.MIN_SEED_POOL_SIZE}) "
+                    f"— topping up with a web search for fresh {Config.TARGET_CITY} topics..."
+                )
+                fresh_topics, topup_cost = self._fetch_and_persist_fresh_topics(Config.FRESH_TOPIC_TOPUP_BATCH_SIZE)
+                stats["total_cost"] += topup_cost
+                if fresh_topics:
+                    seeds["pool"][:0] = fresh_topics
+                    print(f"[SEED_POOL] Added {len(fresh_topics)} fresh topic(s) to the pool for this run.")
+                else:
+                    print("[SEED_POOL] Web search found no usable fresh topics — continuing with the existing pool.")
 
         industry_rotation = list(Config.INDUSTRY_CATEGORIES) or [Config.get_random_category("generic")]
         random.shuffle(industry_rotation)
@@ -279,6 +366,12 @@ class ConcurrentCampaignManager:
                 obj = seeds["pool"].pop(0)
                 seed_info["title"] = obj.get("title", "")
 
+                seed_source = obj.get("source", "scraped")
+                logger.info(
+                    "[SEED] Popped %s seed for generic job: '%s' (raw category hint: %s, %d left in pool)",
+                    seed_source, seed_info["title"], obj.get("category") or "none", len(seeds["pool"])
+                )
+
                 # Let the seed's category (if available) drive the choice, otherwise
                 # rotation — unless that category is already overused this run.
                 scraped_cat = obj.get("category")
@@ -288,6 +381,11 @@ class ConcurrentCampaignManager:
                     seed_info["category"] = _pop_next_category(
                         industry_rotation, Config.INDUSTRY_CATEGORIES, "generic"
                     )
+                    if scraped_cat:
+                        logger.info(
+                            "[SEED] Category '%s' is overused this run — falling back to rotation category '%s'.",
+                            scraped_cat, seed_info["category"]
+                        )
 
                 # Also use keywords from the seed if available
                 kws = obj.get("keywords")
@@ -310,6 +408,29 @@ class ConcurrentCampaignManager:
 
             _record_category_use(seed_info["category"])
             return seed_info
+
+        def refresh_seeds_with_fresh_topics():
+            """Stagnation fallback: the fixed category/keyword pool has produced too
+            many consecutive duplicate/failed attempts to trust for a while — search
+            the live web for current TARGET_CITY news and prepend fresh, real topics
+            to the seed pool so the next 'generic' job gets one of these instead of
+            colliding with the same exhausted pool again."""
+            print(
+                f"\n[STAGNATION] {stats['consecutive_failures']} consecutive failures — "
+                f"searching the web for fresh {Config.TARGET_CITY} topics..."
+            )
+            fresh_topics, cost = self._fetch_and_persist_fresh_topics(Config.FRESH_TOPIC_TOPUP_BATCH_SIZE)
+            stats["total_cost"] += cost
+            if fresh_topics:
+                seeds["pool"][:0] = fresh_topics  # prepend — used before the existing pool
+                print(f"[STAGNATION] Added {len(fresh_topics)} fresh topic(s) to the seed pool.")
+                logger.info(
+                    "[STAGNATION] Injected %d fresh web-search topic(s) into seed pool. Cost: $%.4f",
+                    len(fresh_topics), cost
+                )
+            else:
+                print("[STAGNATION] Web search found no usable fresh topics — continuing with existing pool.")
+                logger.warning("[STAGNATION] fetch_fresh_topics() returned no usable topics.")
 
         # Safety valve: Stop if we try too many times (e.g., 5x the target) to prevent infinite loops
         max_attempts = total_articles * 5
@@ -363,7 +484,8 @@ class ConcurrentCampaignManager:
                     self._handle_worker_result(
                         future, stats, executor, futures_set,
                         publish_to_wordpress,
-                        get_next_job_params
+                        get_next_job_params,
+                        refresh_seeds_with_fresh_topics
                     )
 
                 # Check safety limit
@@ -389,10 +511,29 @@ class ConcurrentCampaignManager:
     def _handle_worker_result(
         self, future, stats, executor, futures_set,
         publish_to_wordpress,
-        get_next_job_params
+        get_next_job_params,
+        refresh_seeds_fn=None
     ):
         """Helper to process a completed worker future and manage retries."""
         stats["processed_attempts"] += 1
+
+        def _bump_stagnation_and_maybe_refresh():
+            """Counts this failure/skip toward the stagnation threshold, and fires
+            the fresh-topic web search exactly once per stagnation streak (reset by
+            the next success) once Config.FRESH_TOPIC_FAILURE_THRESHOLD is hit."""
+            stats["consecutive_failures"] += 1
+            logger.info(
+                "[STAGNATION] Consecutive failures: %d/%d (triggers fresh-topic web search at threshold)",
+                stats["consecutive_failures"], Config.FRESH_TOPIC_FAILURE_THRESHOLD
+            )
+            if (
+                refresh_seeds_fn is not None
+                and not stats["fresh_topics_triggered"]
+                and stats["consecutive_failures"] >= Config.FRESH_TOPIC_FAILURE_THRESHOLD
+            ):
+                stats["fresh_topics_triggered"] = True
+                refresh_seeds_fn()
+
         try:
             result = future.result()
 
@@ -406,6 +547,10 @@ class ConcurrentCampaignManager:
             status = result['status']
 
             if status == 'success':
+                # A success ends the stagnation streak — a future streak (later in a
+                # long campaign) can trigger fresh topics again.
+                stats["consecutive_failures"] = 0
+                stats["fresh_topics_triggered"] = False
                 stats["success_count"] += 1
                 stats["successful_articles"].append(result)
                 if result.get('has_image'):
@@ -428,6 +573,7 @@ class ConcurrentCampaignManager:
                 else:
                     stats["failure_count"] += 1
                     print(f"FAILURE (Will Retry): {result['error']}")
+                _bump_stagnation_and_maybe_refresh()
 
                 # RETRY LOGIC: Replenish this slot immediately.
                 if (
@@ -454,6 +600,7 @@ class ConcurrentCampaignManager:
         except Exception as error:  # pylint: disable=broad-exception-caught
             stats["failure_count"] += 1
             print(f"CRITICAL WORKER FAIL: {error}")
+            _bump_stagnation_and_maybe_refresh()
             # Even for crash, try to replenish
             if (
                 stats["success_count"] < stats["total_articles"] and

@@ -3,7 +3,7 @@ Prompts Module
 This module contains functions that generate the structured prompts
 used to guide the Language Model's output for both title and content generation.
 """
-from prompts.title_prompts import create_title_prompt, create_location_sanitizer_prompt
+from prompts.title_prompts import create_title_prompt, create_location_sanitizer_prompt, create_fresh_topics_prompt
 from prompts.content_prompts import (
     create_content_prompt,
     create_humanize_prompt,
@@ -18,6 +18,7 @@ from prompts.social_prompts import create_linkedin_prompt
 __all__ = [
     "create_title_prompt",
     "create_location_sanitizer_prompt",
+    "create_fresh_topics_prompt",
     "create_content_prompt",
     "create_humanize_prompt",
     "create_keyword_extraction_prompt",
