@@ -520,7 +520,9 @@ class Config:
     CART_EXPORT_API_URL = os.getenv("CART_EXPORT_API_URL", "http://prod.okghumo.com/api/carts/export/xlsx")
     # How many days back (from "today") the exported single-day window covers.
     # 0 = today's carts (the day the cron actually runs on); 1 = yesterday's, etc.
-    CART_EXPORT_LOOKBACK_DAYS = int(os.getenv("CART_EXPORT_LOOKBACK_DAYS", "0"))
+    # Defaults to 1 (yesterday): the cron runs once daily, so "today" is still
+    # incomplete at run time — yesterday is the last fully-closed day of data.
+    CART_EXPORT_LOOKBACK_DAYS = int(os.getenv("CART_EXPORT_LOOKBACK_DAYS", "1"))
 
     # SMTP Email Configuration
     SMTP_HOST = os.getenv("SMTP_HOST", "smtp.gmail.com")
