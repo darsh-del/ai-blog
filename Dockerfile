@@ -43,12 +43,14 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     USE_PLAIN_SELENIUM=1 \
     APP_DATA_DIR=/app/data \
     REDIS_HOST=localhost \
-    REDIS_PORT=6379
+    REDIS_PORT=6379 \
+    TZ=Asia/Kolkata
 
 WORKDIR /app
 
-# Install runtime dependencies (Chromium, curl, and cron for the scheduled
-# generate_and_email.py run — see entrypoint.sh / setup_cron.py)
+# Install runtime dependencies (Chromium, curl, cron for the scheduled
+# generate_and_email.py run — see entrypoint.sh / setup_cron.py — and tzdata so
+# TZ above actually shifts cron's/Python's clock instead of being a no-op env var)
 # In Bookworm, chromium automatically pulls in necessary libnss3, libgbm1, etc.
 RUN apt-get update && apt-get install -y --no-install-recommends \
     chromium \
@@ -56,6 +58,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
     fonts-liberation \
     cron \
+    tzdata \
+    && ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone \
     && apt-get clean && rm -rf /var/lib/apt/lists/*
 
 # Copy pre-compiled virtual environment from builder
